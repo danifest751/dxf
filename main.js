@@ -359,7 +359,7 @@ if (scanBtn){
   scanBtn.addEventListener('click', async ()=>{
     try{
       const r = await lib.scanDirAndImport();
-      await renderLibrary(search?search.value:'');
+      if (r && r.error) { setStatus('Авто-импорт: '+r.error,'err'); try{ await lib.saveDirHandle(null); }catch(_){} if (dirName) dirName.textContent='Папка не выбрана'; } else { await renderLibrary(search?search.value:''); }
       setStatus(`Импортировано: ${r.imported}, пропущено: ${r.skipped}`);
     }catch(err){ setStatus('Ошибка сканирования','err'); }
   });
