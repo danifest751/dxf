@@ -93,6 +93,11 @@ export async function addOrUpdateDXF(name, text){
     }
   } finally { db.close(); }
 }
+// Thin wrapper for legacy calls
+export async function addDXF(name, text){
+  return await addOrUpdateDXF(name, text);
+}
+
 
 export async function getDXF(id){
   const db = await openDB();
