@@ -331,7 +331,7 @@ if (!HAS_FS && dirRow){
       await lib.scanDirAndImport();
       await renderLibrary(search?search.value:'');
     }
-  }(e){ console.warn(e); }
+  }catch(e){ console.warn(e); }
 })();
 
 if (autoCb){
