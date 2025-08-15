@@ -265,3 +265,34 @@ export async function scanDirAndImport(){
   }
   return {imported, skipped};
 }
+
+// Import all .dxf from the internal OPFS "DXF" folder into the library (idempotent)
+export async function scanPermanentDXF(){
+  const dir = await getPermDXFFolder();
+  if (!dir) return { imported:0, skipped:0 };
+  let imported=0, skipped=0;
+  if (dir.values){
+    for await (const entry of dir.values()){
+      try{
+        if (entry.kind==='file' && /\.dxf$/i.test(entry.name)){
+          const f = await entry.getFile();
+          const txt = await f.text();
+          await addOrUpdateDXF(entry.name, txt); // will update if exists
+          imported++;
+        }
+      }catch(_){ skipped++; }
+    }
+  } else if (dir.entries){
+    for await (const [name, entry] of dir.entries()){
+      try{
+        if (entry.kind==='file' && /\.dxf$/i.test(name)){
+          const f = await entry.getFile();
+          const txt = await f.text();
+          await addOrUpdateDXF(name, txt);
+          imported++;
+        }
+      }catch(_){ skipped++; }
+    }
+  }
+  return { imported, skipped };
+}

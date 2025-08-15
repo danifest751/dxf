@@ -315,12 +315,23 @@ if (!HAS_FS && dirRow){
 
 (async ()=>{
   try{
+    // Always scan the internal OPFS "DXF" folder at startup
+    try{
+      const r0 = await lib.scanPermanentDXF();
+      if (r0 && (r0.imported||r0.skipped)) {
+        await renderLibrary(search?search.value:'');
+      }
+    }catch(e){ console.warn('OPFS DXF scan:', e); }
+
     const on = await lib.getAutoImport();
     if (autoCb) autoCb.checked = !!on;
     const h = await lib.getDirHandle();
     if (dirName) dirName.textContent = h ? 'Папка настроена' : 'Папка не выбрана';
-    if (on && h){ await lib.scanDirAndImport(); await renderLibrary(search?search.value:''); }
-  }catch(e){ console.warn(e); }
+    if (on && h){
+      await lib.scanDirAndImport();
+      await renderLibrary(search?search.value:'');
+    }
+  }(e){ console.warn(e); }
 })();
 
 if (autoCb){
