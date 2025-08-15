@@ -328,8 +328,14 @@ if (!HAS_FS && dirRow){
     const h = await lib.getDirHandle();
     if (dirName) dirName.textContent = h ? 'Папка настроена' : 'Папка не выбрана';
     if (on && h){
-      await lib.scanDirAndImport();
-      await renderLibrary(search?search.value:'');
+      const r = await lib.scanDirAndImport();
+      if (r && r.error) {
+        setStatus('Авто-импорт: '+r.error, 'err');
+        try{ await lib.saveDirHandle(null); }catch(_){}
+        if (dirName) dirName.textContent = 'Папка не выбрана';
+      } else {
+        await renderLibrary(search?search.value:'');
+      }
     }
   }catch(e){ console.warn(e); }
 })();
