@@ -162,6 +162,44 @@ export async function renameDXF(id, name){
   } finally { db.close(); }
 }
 
+// ==== Permanent OPFS 'DXF' folder ====
+const HAS_OPFS = !!(navigator && navigator.storage && navigator.storage.getDirectory);
+
+async function getPermDXFFolder(){
+  if (!HAS_OPFS) return null;
+  const root = await navigator.storage.getDirectory();
+  const dir  = await root.getDirectoryHandle('DXF', { create: true });
+  return dir;
+}
+function sanitizeName(name){
+  return String(name||'unnamed.dxf').replace(/[\\/\0]/g,'_').trim() || 'unnamed.dxf';
+}
+async function writeToPermanent(name, text){
+  const dir = await getPermDXFFolder();
+  if (!dir) return false;
+  const safe = sanitizeName(name);
+  const fh = await dir.getFileHandle(safe, { create: true });
+  const w  = await fh.createWritable();
+  await w.write(text);
+  await w.close();
+  return true;
+}
+async function listPermanentNames(){
+  const dir = await getPermDXFFolder();
+  if (!dir) return [];
+  const out = [];
+  if (dir.values){
+    for await (const entry of dir.values()){
+      if (entry.kind==='file' && /\.dxf$/i.test(entry.name)) out.push(entry.name);
+    }
+  }else if (dir.entries){
+    for await (const [name, entry] of dir.entries()){
+      if (entry.kind==='file' && /\.dxf$/i.test(name)) out.push(name);
+    }
+  }
+  return out;
+}
+
 const HAS_FS = typeof window!=='undefined' && 'showDirectoryPicker' in window;
 
 function putMeta(tx, key, value){
