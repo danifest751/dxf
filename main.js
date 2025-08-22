@@ -91,7 +91,6 @@ function applyConfigurationToElements() {
     power: $('power'),
     gas: $('gas'),
     thickness: $('th'),
-    thicknessDisplay: $('tVal'),
     pricePerMeter: $('pPerM'),
     pricePerPierce: $('pPierce'),
     gasPricePerMinute: $('gasPrice'),
@@ -162,7 +161,7 @@ function initializeEventHandlers() {
   document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>{ state.tab=t.dataset.tab; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t)); safeDraw() }));
 
   // UI events with config saving
-  on($('th'),'input',()=>{ $('tVal').textContent=$('th').value; if(state.parsed) { recomputeParams(); updateCards(); } saveCurrentConfig(); });
+  on($('th'),'change',()=>{ if(state.parsed) { recomputeParams(); updateCards(); } saveCurrentConfig(); });
   on($('power'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} saveCurrentConfig();});
   on($('gas'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} saveCurrentConfig();});
   

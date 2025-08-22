@@ -101,9 +101,7 @@ export function applyConfigToForm(elements) {
     if (elements.gas) elements.gas.value = cfg.cutting.gas;
     if (elements.thickness) {
       elements.thickness.value = cfg.cutting.thickness;
-      if (elements.thicknessDisplay) {
-        elements.thicknessDisplay.textContent = cfg.cutting.thickness;
-      }
+      // No need for thicknessDisplay anymore since it's now a select
     }
     
     // Apply pricing parameters
