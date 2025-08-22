@@ -551,27 +551,41 @@ function drawCombinedNesting(state, canvas) {
       ];
       const color = colors[fileIndex % colors.length];
       
-      // Draw part rectangle
+      // Draw background rectangle with transparency
       ctx.fillStyle = color.fill;
+      ctx.fillRect(partX, partY, partW, partH);
+      
+      // Draw mini DXF preview
+      ctx.save();
+      ctx.translate(partX, partY);
+      
+      // Apply rotation if needed
+      if (part.rotation !== 0) {
+        ctx.translate(partW / 2, partH / 2);
+        ctx.rotate(part.rotation * Math.PI / 180);
+        ctx.translate(-partW / 2, -partH / 2);
+      }
+      
+      // Set clipping region to part bounds
+      ctx.beginPath();
+      ctx.rect(0, 0, partW, partH);
+      ctx.clip();
+      
+      // Draw the DXF content
+      drawMiniDXFContent(ctx, part.file.parsed, partW, partH, color.stroke);
+      
+      ctx.restore();
+      
+      // Draw border
       ctx.strokeStyle = color.stroke;
       ctx.lineWidth = 1;
-      ctx.fillRect(partX, partY, partW, partH);
       ctx.strokeRect(partX, partY, partW, partH);
       
       // Draw rotation indicator if rotated
       if (part.rotation !== 0) {
         ctx.fillStyle = '#ffffff';
-        ctx.font = `${8 * scale}px system-ui`;
+        ctx.font = `${Math.max(8, 8 * scale)}px system-ui`;
         ctx.fillText(`${part.rotation}°`, partX + 2, partY + 12);
-      }
-      
-      // Draw part label
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `${Math.max(8, 10 * scale)}px system-ui`;
-      const label = `${part.file.name.split('.')[0]}`;
-      const labelW = ctx.measureText(label).width;
-      if (labelW < partW - 4) {
-        ctx.fillText(label, partX + 2, partY + partH - 4);
       }
     });
     
@@ -604,17 +618,93 @@ function drawCombinedNesting(state, canvas) {
     const rectX = legendX + legendOffset;
     const rectY = legendY + 10;
     
+    // Draw mini preview for legend
     ctx.fillStyle = color.fill;
+    ctx.fillRect(rectX, rectY, 20, 15);
+    
+    ctx.save();
+    ctx.translate(rectX, rectY);
+    ctx.beginPath();
+    ctx.rect(0, 0, 20, 15);
+    ctx.clip();
+    drawMiniDXFContent(ctx, file.parsed, 20, 15, color.stroke);
+    ctx.restore();
+    
     ctx.strokeStyle = color.stroke;
     ctx.lineWidth = 1;
-    ctx.fillRect(rectX, rectY, 15, 10);
-    ctx.strokeRect(rectX, rectY, 15, 10);
+    ctx.strokeRect(rectX, rectY, 20, 15);
     
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(`${file.name.split('.')[0]} (×${file.quantity || 1})`, rectX + 20, rectY + 8);
+    ctx.fillText(`${file.name.split('.')[0]} (×${file.quantity || 1})`, rectX + 25, rectY + 10);
     
-    legendOffset += ctx.measureText(`${file.name.split('.')[0]} (×${file.quantity || 1})`).width + 50;
+    legendOffset += ctx.measureText(`${file.name.split('.')[0]} (×${file.quantity || 1})`).width + 70;
   });
+}
+
+function drawMiniDXFContent(ctx, parsed, width, height, strokeColor) {
+  if (!parsed || !parsed.entities || parsed.entities.length === 0) return;
+  
+  // Get bounds of the DXF
+  const bounds = getBounds(parsed.entities);
+  if (bounds.maxX <= bounds.minX || bounds.maxY <= bounds.minY) return;
+  
+  const boundsW = bounds.maxX - bounds.minX;
+  const boundsH = bounds.maxY - bounds.minY;
+  
+  // Calculate scale to fit in available space with padding
+  const padding = 2;
+  const scaleX = (width - 2 * padding) / boundsW;
+  const scaleY = (height - 2 * padding) / boundsH;
+  const scale = Math.min(scaleX, scaleY);
+  
+  // Center the drawing
+  const offsetX = (width - boundsW * scale) / 2 - bounds.minX * scale;
+  const offsetY = (height - boundsH * scale) / 2 - bounds.minY * scale;
+  
+  // Set up drawing context
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, -scale); // Flip Y axis to match DXF coordinate system
+  ctx.translate(0, -bounds.maxY - bounds.minY);
+  
+  // Draw entities
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = Math.max(0.5, 1 / scale); // Ensure line width is visible at any scale
+  
+  for (const entity of parsed.entities) {
+    if (!entity || !entity.raw) continue;
+    
+    ctx.beginPath();
+    
+    if (entity.type === 'LINE') {
+      const { x1, y1, x2, y2 } = entity.raw;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+    } else if (entity.type === 'CIRCLE') {
+      const { cx, cy, r } = entity.raw;
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    } else if (entity.type === 'ARC') {
+      const { cx, cy, r, a1 = 0, a2 = 0 } = entity.raw;
+      const startAngle = a1 * Math.PI / 180;
+      const endAngle = a2 * Math.PI / 180;
+      ctx.arc(cx, cy, r, startAngle, endAngle);
+    } else if (entity.type === 'POLY') {
+      const pts = entity.raw.pts || [];
+      if (pts.length > 0) {
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x, pts[i].y);
+        }
+        if (entity.raw.closed) {
+          ctx.closePath();
+        }
+      }
+    }
+    
+    ctx.stroke();
+  }
+  
+  ctx.restore();
 }
 
 function updateEmptyLayoutMessage() {
@@ -691,6 +781,21 @@ function createFileTab(file) {
   tab.className = 'file-tab';
   tab.dataset.fileId = file.id;
   
+  // Add mini preview canvas
+  const previewContainer = document.createElement('div');
+  previewContainer.className = 'file-tab-preview';
+  
+  const previewCanvas = document.createElement('canvas');
+  previewCanvas.width = 40;
+  previewCanvas.height = 30;
+  previewCanvas.className = 'mini-preview';
+  previewContainer.appendChild(previewCanvas);
+  
+  // Draw preview if file is parsed
+  if (file.parsed) {
+    drawMiniPreview(previewCanvas, file.parsed);
+  }
+  
   const fileName = document.createElement('span');
   fileName.className = 'file-tab-name';
   fileName.textContent = file.name;
@@ -732,6 +837,7 @@ function createFileTab(file) {
   closeBtn.innerHTML = '✕';
   closeBtn.title = 'Закрыть файл';
   
+  tab.appendChild(previewContainer);
   tab.appendChild(fileName);
   tab.appendChild(layoutCheckboxContainer);
   tab.appendChild(quantityContainer);
@@ -1486,6 +1592,15 @@ async function loadFile(file){
     // Update file object with parsed data
     fileObj.parsed = parsed;
     
+    // Update the preview in the tab
+    const tab = document.querySelector(`[data-file-id="${fileObj.id}"]`);
+    if (tab) {
+      const previewCanvas = tab.querySelector('.mini-preview');
+      if (previewCanvas) {
+        drawMiniPreview(previewCanvas, parsed);
+      }
+    }
+    
     console.log('Building paths for', file.name);
     
     measurePerformance('path_building', () => {
@@ -1723,3 +1838,121 @@ function updateCards(){
 }
 
 // Note: Nesting and Tests handlers moved to initializeEventHandlers function to avoid duplicates
+
+function drawMiniPreview(canvas, parsed) {
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  
+  // Clear canvas
+  ctx.clearRect(0, 0, width, height);
+  
+  if (!parsed || !parsed.entities || parsed.entities.length === 0) {
+    // Draw placeholder
+    ctx.fillStyle = '#444';
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = '#666';
+    ctx.strokeRect(0, 0, width, height);
+    return;
+  }
+  
+  // Get bounds of the DXF
+  const bounds = getBounds(parsed.entities);
+  if (bounds.maxX <= bounds.minX || bounds.maxY <= bounds.minY) return;
+  
+  const boundsW = bounds.maxX - bounds.minX;
+  const boundsH = bounds.maxY - bounds.minY;
+  
+  // Calculate scale to fit in canvas with padding
+  const padding = 2;
+  const scaleX = (width - 2 * padding) / boundsW;
+  const scaleY = (height - 2 * padding) / boundsH;
+  const scale = Math.min(scaleX, scaleY);
+  
+  // Center the drawing
+  const offsetX = (width - boundsW * scale) / 2 - bounds.minX * scale;
+  const offsetY = (height - boundsH * scale) / 2 - bounds.minY * scale;
+  
+  // Set up drawing context
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, -scale); // Flip Y axis to match DXF coordinate system
+  ctx.translate(0, -bounds.maxY - bounds.minY);
+  
+  // Draw entities
+  ctx.strokeStyle = '#77a1ff';
+  ctx.lineWidth = 1 / scale; // Ensure line width is visible at any scale
+  
+  for (const entity of parsed.entities) {
+    if (!entity || !entity.raw) continue;
+    
+    ctx.beginPath();
+    
+    if (entity.type === 'LINE') {
+      const { x1, y1, x2, y2 } = entity.raw;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+    } else if (entity.type === 'CIRCLE') {
+      const { cx, cy, r } = entity.raw;
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    } else if (entity.type === 'ARC') {
+      const { cx, cy, r, a1 = 0, a2 = 0 } = entity.raw;
+      const startAngle = a1 * Math.PI / 180;
+      const endAngle = a2 * Math.PI / 180;
+      ctx.arc(cx, cy, r, startAngle, endAngle);
+    } else if (entity.type === 'POLY') {
+      const pts = entity.raw.pts || [];
+      if (pts.length > 0) {
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x, pts[i].y);
+        }
+        if (entity.raw.closed) {
+          ctx.closePath();
+        }
+      }
+    }
+    
+    ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+
+function getBounds(entities) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  
+  for (const e of entities) {
+    if (!e || !e.raw) continue;
+    
+    if (e.type === 'LINE') {
+      const { x1, y1, x2, y2 } = e.raw;
+      minX = Math.min(minX, x1, x2);
+      minY = Math.min(minY, y1, y2);
+      maxX = Math.max(maxX, x1, x2);
+      maxY = Math.max(maxY, y1, y2);
+    } else if (e.type === 'CIRCLE') {
+      const { cx, cy, r } = e.raw;
+      minX = Math.min(minX, cx - r);
+      minY = Math.min(minY, cy - r);
+      maxX = Math.max(maxX, cx + r);
+      maxY = Math.max(maxY, cy + r);
+    } else if (e.type === 'ARC') {
+      const { cx, cy, r } = e.raw;
+      minX = Math.min(minX, cx - r);
+      minY = Math.min(minY, cy - r);
+      maxX = Math.max(maxX, cx + r);
+      maxY = Math.max(maxY, cy + r);
+    } else if (e.type === 'POLY') {
+      const pts = e.raw.pts || [];
+      for (const p of pts) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      }
+    }
+  }
+  
+  return { minX, minY, maxX, maxY };
+}

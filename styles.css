@@ -265,7 +265,20 @@ header p{
   cursor: pointer;
   transition: all 0.3s ease;
   font-size: 13px;
-  min-width: 200px;
+  min-width: 220px;
+}
+
+.file-tab-preview {
+  margin-right: 8px;
+  border: 1px solid var(--ring);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.mini-preview {
+  display: block;
+  background: #1a1a1a;
 }
 
 .file-tab:hover {
