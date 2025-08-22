@@ -32,6 +32,7 @@ function createFileObject(file, content) {
     index: null,
     visible: true,
     quantity: 1,
+    includeInLayout: true, // Whether to include in multi-file layout
     settings: {
       thickness: parseFloat($('th')?.value || '3'),
       power: $('power')?.value || '1.5',
@@ -113,6 +114,12 @@ function updateActiveFileUI() {
     calculationCache.lastParams = null;
     calculationCache.lastResult = null;
   }
+  
+  // Update multi-file nesting button state
+  const multiFileNestBtn = $('multiFileNestBtn');
+  if (multiFileNestBtn) {
+    multiFileNestBtn.disabled = projectState.files.length === 0;
+  }
 }
 
 function createFileTab(file) {
@@ -124,6 +131,18 @@ function createFileTab(file) {
   fileName.className = 'file-tab-name';
   fileName.textContent = file.name;
   fileName.title = file.name;
+  
+  // Add layout checkbox
+  const layoutCheckboxContainer = document.createElement('div');
+  layoutCheckboxContainer.className = 'file-tab-layout-checkbox';
+  
+  const layoutCheckbox = document.createElement('input');
+  layoutCheckbox.type = 'checkbox';
+  layoutCheckbox.checked = file.includeInLayout;
+  layoutCheckbox.className = 'layout-checkbox';
+  layoutCheckbox.title = 'Включить в раскладку';
+  
+  layoutCheckboxContainer.appendChild(layoutCheckbox);
   
   // Add quantity input
   const quantityContainer = document.createElement('div');
@@ -150,14 +169,24 @@ function createFileTab(file) {
   closeBtn.title = 'Закрыть файл';
   
   tab.appendChild(fileName);
+  tab.appendChild(layoutCheckboxContainer);
   tab.appendChild(quantityContainer);
   tab.appendChild(closeBtn);
   
   // Tab click event
   on(tab, 'click', (e) => {
-    if (e.target !== closeBtn && e.target !== quantityInput) {
+    if (e.target !== closeBtn && e.target !== quantityInput && e.target !== layoutCheckbox) {
       setActiveFile(file.id);
     }
+  });
+  
+  // Layout checkbox event
+  on(layoutCheckbox, 'change', (e) => {
+    e.stopPropagation();
+    file.includeInLayout = e.target.checked;
+    
+    // Update multi-file nesting calculations
+    updateMultiFileNestingInfo();
   });
   
   // Quantity input event
@@ -195,6 +224,12 @@ function addFileToProject(file, content) {
   const tabsContainer = $('fileTabs');
   if (tabsContainer) {
     tabsContainer.style.display = 'block';
+  }
+  
+  // Enable multi-file nesting button
+  const multiFileNestBtn = $('multiFileNestBtn');
+  if (multiFileNestBtn) {
+    multiFileNestBtn.disabled = false;
   }
   
   // Set as active if it's the first file
@@ -259,21 +294,14 @@ function removeFile(fileId) {
 // Multi-file nesting functions
 function updateMultiFileNestingInfo() {
   const multiFileCard = $('multiFileCard');
-  if (!multiFileCard || projectState.files.length <= 1) {
-    if (multiFileCard) multiFileCard.style.display = 'none';
-    return;
-  }
-  
-  multiFileCard.style.display = 'block';
-  
-  const totalParts = projectState.files.reduce((sum, file) => sum + (file.quantity || 1), 0);
-  const totalFiles = projectState.files.length;
-  
-  $('multiFileTotalParts').textContent = totalParts;
-  $('multiFileTotalFiles').textContent = totalFiles;
+  if (!multiFileCard) return;
   
   // Calculate estimated sheets needed for all files
   calculateMultiFileNesting();
+  
+  // Show the card if we have at least one included file
+  const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
+  multiFileCard.style.display = includedFiles.length > 0 ? 'block' : 'none';
 }
 
 function calculateMultiFileNesting() {
@@ -289,7 +317,32 @@ function calculateMultiFileNesting() {
   let totalTime = 0;
   const fileResults = [];
   
-  for (const file of projectState.files) {
+  // Filter files that should be included in layout
+  const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
+  
+  // Count total included files and parts
+  const totalIncludedFiles = includedFiles.length;
+  const totalIncludedParts = includedFiles.reduce((sum, file) => sum + (file.quantity || 1), 0);
+  
+  // Update UI with totals
+  const totalFilesEl = $('multiFileTotalFiles');
+  const totalPartsEl = $('multiFileTotalParts');
+  const sheetsEl = $('multiFileSheets');
+  const costEl = $('multiFileCost');
+  const timeEl = $('multiFileTime');
+  
+  if (totalFilesEl) totalFilesEl.textContent = totalIncludedFiles;
+  if (totalPartsEl) totalPartsEl.textContent = totalIncludedParts;
+  
+  // If no files are included, reset the display and return
+  if (totalIncludedFiles === 0) {
+    if (sheetsEl) sheetsEl.textContent = '0';
+    if (costEl) costEl.textContent = '0 ₽';
+    if (timeEl) timeEl.textContent = '0 мин';
+    return;
+  }
+  
+  for (const file of includedFiles) {
     if (!file.parsed) continue;
     
     // Get bounding box for this file
@@ -341,9 +394,9 @@ function calculateMultiFileNesting() {
   }
   
   // Update UI with results
-  $('multiFileSheets').textContent = totalSheetsNeeded;
-  $('multiFileCost').textContent = totalCost.toFixed(2) + ' ₽';
-  $('multiFileTime').textContent = totalTime.toFixed(2) + ' мин';
+  if (sheetsEl) sheetsEl.textContent = totalSheetsNeeded;
+  if (costEl) costEl.textContent = totalCost.toFixed(2) + ' ₽';
+  if (timeEl) timeEl.textContent = totalTime.toFixed(2) + ' мин';
   
   // Store results for potential use
   projectState.multiFileNesting = {
@@ -401,6 +454,13 @@ async function initializeApp() {
     
     initCanvasInteractions(state, cv, safeDraw);
     initializeEventHandlers();
+    
+    // Initialize button states
+    const multiFileNestBtn = $('multiFileNestBtn');
+    if (multiFileNestBtn) {
+      multiFileNestBtn.disabled = true; // Disabled initially since no files are loaded
+    }
+    
     console.log('App initialized successfully');
     setStatus('Готово к работе', 'ok');
   } catch (e) {
@@ -782,6 +842,35 @@ function initializeEventHandlers() {
     on(calculateMultiFileBtn, 'click', () => {
       updateMultiFileNestingInfo();
       setStatus('Мультифайловая раскладка пересчитана', 'ok');
+    });
+  }
+  
+  const multiFileNestBtn = $('multiFileNestBtn');
+  if (multiFileNestBtn) {
+    on(multiFileNestBtn, 'click', () => {
+      // Check if we have any files to include in layout
+      const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
+      
+      if (includedFiles.length === 0) {
+        setStatus('Нет файлов для раскладки. Пожалуйста, выберите файлы с помощью флажков.', 'err');
+        return;
+      }
+      
+      // Update multi-file nesting calculations
+      updateMultiFileNestingInfo();
+      
+      // Show the multi-file card
+      const multiFileCard = $('multiFileCard');
+      if (multiFileCard) {
+        multiFileCard.style.display = 'block';
+      }
+      
+      // Show the nesting tab
+      state.tab = 'nest';
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'nest'));
+      safeDraw();
+      
+      setStatus('Раскладка выбранных файлов готова', 'ok');
     });
   }
   

@@ -219,6 +219,11 @@ header p{
   margin-bottom: 12px;
 }
 
+.file-tabs-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .tabs-title {
   font-weight: 600;
   color: var(--muted);
@@ -280,6 +285,40 @@ header p{
   text-overflow: ellipsis;
   white-space: nowrap;
   margin-right: 8px;
+}
+
+.file-tab-layout-checkbox {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: 6px;
+}
+
+.layout-checkbox {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  border: 1px solid var(--ring);
+  border-radius: 3px;
+  background-color: var(--card);
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+}
+
+.layout-checkbox:checked {
+  background-color: var(--primary-solid);
+  border-color: var(--primary-solid);
+}
+
+.layout-checkbox:checked:after {
+  content: '\2713';
+  position: absolute;
+  color: white;
+  font-size: 10px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .file-tab-quantity {

@@ -32,7 +32,10 @@
         <div id="fileTabs" class="file-tabs" style="display:none; margin-top: 16px;">
           <div class="file-tabs-header">
             <span class="tabs-title">📁 Файлы:</span>
-            <button id="addFileBtn" class="btn btn-small" title="Добавить файл">➕</button>
+            <div class="file-tabs-actions">
+              <button id="multiFileNestBtn" class="btn btn-small" title="Раскладка выбранных файлов">📦 Раскладка</button>
+              <button id="addFileBtn" class="btn btn-small" title="Добавить файл">➕</button>
+            </div>
           </div>
           <div id="fileTabsList" class="file-tabs-list"></div>
         </div>
@@ -113,7 +116,7 @@
           </div>
           <div style="display:flex; align-items:flex-end; gap:8px">
             <button id="calc" class="btn primary" disabled>🔄 Посчитать</button>
-            <button id="nest" class="btn" disabled>📦 Раскладка</button>
+            <button id="nest" class="btn" disabled style="display: none;">📦 Раскладка</button>
           </div>
         </div>
 
