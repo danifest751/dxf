@@ -1433,21 +1433,21 @@ function initializeEventHandlers() {
   on($('dlCSV'),'click',()=>downloadText('entities.csv',createCSV(state.parsed)));
   on($('dlReport'),'click',()=>downloadText('nesting_report.txt', makeNestingReport(state)));
 
-  // Drag & drop / file handling for multiple files
-  const drop=$('drop');
-  on(drop,'dragover',e=>{e.preventDefault(); drop.style.borderColor='#6d8cff'});
-  on(drop,'dragleave',()=>drop.style.borderColor='#44507a');
-  on(drop,'drop',e=>{
-    e.preventDefault(); 
-    drop.style.borderColor='#44507a'; 
-    const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.dxf'));
-    if(files.length > 0) {
-      loadFiles(files);
-    } else {
-      setStatus('Пожалуйста, выберите DXF файлы', 'err');
-    }
-  });
-  on(drop,'click',()=>$('file').click());
+  // Drag & drop / file handling for multiple files - removed drop functionality
+  // const drop=$('drop');
+  // on(drop,'dragover',e=>{e.preventDefault(); drop.style.borderColor='#6d8cff'});
+  // on(drop,'dragleave',()=>drop.style.borderColor='#44507a');
+  // on(drop,'drop',e=>{
+  //   e.preventDefault(); 
+  //   drop.style.borderColor='#44507a'; 
+  //   const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.dxf'));
+  //   if(files.length > 0) {
+  //     loadFiles(files);
+  //   } else {
+  //     setStatus('Пожалуйста, выберите DXF файлы', 'err');
+  //   }
+  // });
+  // on(drop,'click',()=>$('file').click());
   on($('file'),'change',e=>{ 
     const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.dxf'));
     if(files.length > 0) {
