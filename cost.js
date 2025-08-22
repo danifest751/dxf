@@ -20,6 +20,14 @@ export function calcCutParams(power, th, gas){
   const thicknessKey = String(th);
   const powerKey = String(power);
   
+  // Debug: Check if configuration values are loaded
+  if (Object.keys(baseCutSpeeds).length === 0) {
+    console.warn('baseCutSpeeds configuration is empty or not loaded');
+  }
+  if (Object.keys(powerMultipliers).length === 0) {
+    console.warn('powerMultipliers configuration is empty or not loaded');
+  }
+  
   let speed = baseCutSpeeds[thicknessKey];
   const powerMultiplier = powerMultipliers[powerKey];
   
@@ -27,19 +35,30 @@ export function calcCutParams(power, th, gas){
   if (speed && powerMultiplier) {
     const calculatedSpeed = speed * powerMultiplier;
     speed = Math.round(calculatedSpeed);
-    console.log(`Speed calculation: ${baseCutSpeeds[thicknessKey]} × ${powerMultiplier} = ${calculatedSpeed} → ${speed} mm/min`);
+    // Only log in debug mode to reduce console noise
+    if (console.debug) {
+      console.debug(`Speed calculation: ${baseCutSpeeds[thicknessKey]} × ${powerMultiplier} = ${calculatedSpeed} → ${speed} mm/min`);
+    }
   } else {
+    // Debug: Show what values we got
+    if (!speed || !powerMultiplier) {
+      console.debug(`Missing config values - thickness "${thicknessKey}": ${speed}, power "${powerKey}": ${powerMultiplier}`);
+      console.debug('Available thickness keys:', Object.keys(baseCutSpeeds));
+      console.debug('Available power keys:', Object.keys(powerMultipliers));
+    }
+    
     // Fallback to old cutSpeeds configuration for backward compatibility
     const cutSpeeds = getConfigValue('cutting.cutSpeeds', {});
     speed = cutSpeeds[thicknessKey];
     
-    if (!speed) {
+    if (speed) {
+      console.debug(`Using legacy cutSpeeds configuration: ${speed} mm/min`);
+    } else {
       // Final fallback to calculated speed
       const baseSpeed = 2000;
       speed = Math.max(Math.round(baseSpeed * Math.pow(1 - (th/(max*1.5)), 0.6)), 100);
-      console.log(`No configured speed for thickness ${th}mm and power ${power}kW, using calculated fallback: ${speed} mm/min`);
-    } else {
-      console.log(`Using legacy cutSpeeds configuration: ${speed} mm/min`);
+      // Only show warning for truly missing configurations
+      console.info(`Using calculated speed for ${th}mm @ ${power}kW: ${speed} mm/min`);
     }
   }
   
