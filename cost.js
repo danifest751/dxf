@@ -14,19 +14,20 @@ export function calcCutParams(power, th, gas){
   const max = P.max[gas]; 
   if(th > max) return {can:false, reason:`Недостаточная мощность для ${th} мм (${gas})`};
   
-  // Get base cutting speeds and power multipliers from configuration
-  const baseCutSpeeds = getConfigValue('cutting.baseCutSpeeds', {});
-  const powerMultipliers = getConfigValue('cutting.powerMultipliers', {});
+  // Default values from config.json in case configuration is not loaded yet
+  const defaultBaseCutSpeeds = {
+    "0.5": 3500, "0.6": 3200, "0.7": 3000, "0.8": 2800,
+    "1": 2500, "1.5": 2000, "2": 1600, "3": 1200, "5": 800, "6": 600
+  };
+  const defaultPowerMultipliers = {
+    "0.5": 0.7, "1.0": 1.0, "1.5": 1.4, "2.0": 1.8
+  };
+  
+  // Get configuration values with fallbacks
+  const baseCutSpeeds = getConfigValue('cutting.baseCutSpeeds', defaultBaseCutSpeeds);
+  const powerMultipliers = getConfigValue('cutting.powerMultipliers', defaultPowerMultipliers);
   const thicknessKey = String(th);
   const powerKey = String(power);
-  
-  // Debug: Check if configuration values are loaded
-  if (Object.keys(baseCutSpeeds).length === 0) {
-    console.warn('baseCutSpeeds configuration is empty or not loaded');
-  }
-  if (Object.keys(powerMultipliers).length === 0) {
-    console.warn('powerMultipliers configuration is empty or not loaded');
-  }
   
   let speed = baseCutSpeeds[thicknessKey];
   const powerMultiplier = powerMultipliers[powerKey];
@@ -35,30 +36,17 @@ export function calcCutParams(power, th, gas){
   if (speed && powerMultiplier) {
     const calculatedSpeed = speed * powerMultiplier;
     speed = Math.round(calculatedSpeed);
-    // Only log in debug mode to reduce console noise
-    if (console.debug) {
-      console.debug(`Speed calculation: ${baseCutSpeeds[thicknessKey]} × ${powerMultiplier} = ${calculatedSpeed} → ${speed} mm/min`);
-    }
   } else {
-    // Debug: Show what values we got
-    if (!speed || !powerMultiplier) {
-      console.debug(`Missing config values - thickness "${thicknessKey}": ${speed}, power "${powerKey}": ${powerMultiplier}`);
-      console.debug('Available thickness keys:', Object.keys(baseCutSpeeds));
-      console.debug('Available power keys:', Object.keys(powerMultipliers));
-    }
-    
     // Fallback to old cutSpeeds configuration for backward compatibility
-    const cutSpeeds = getConfigValue('cutting.cutSpeeds', {});
+    const cutSpeeds = getConfigValue('cutting.cutSpeeds', defaultBaseCutSpeeds);
     speed = cutSpeeds[thicknessKey];
     
     if (speed) {
-      console.debug(`Using legacy cutSpeeds configuration: ${speed} mm/min`);
+      // Use legacy configuration speed directly
     } else {
       // Final fallback to calculated speed
       const baseSpeed = 2000;
       speed = Math.max(Math.round(baseSpeed * Math.pow(1 - (th/(max*1.5)), 0.6)), 100);
-      // Only show warning for truly missing configurations
-      console.info(`Using calculated speed for ${th}mm @ ${power}kW: ${speed} mm/min`);
     }
   }
   
