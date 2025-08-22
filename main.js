@@ -125,20 +125,276 @@ function navigateToPrevFile() {
   setActiveFile(projectState.files[currentIndex - 1].id);
 }
 
+function performCombinedNesting(includedFiles) {
+  const W = +$('sW').value;
+  const H = +$('sH').value;
+  const m = +$('margin').value;
+  const g = +$('spacing').value;
+  const rotStr = $('rotations').value;
+  const rots = rotStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !Number.isNaN(n));
+  
+  // Collect all parts from all files with their quantities
+  const allParts = [];
+  
+  for (const file of includedFiles) {
+    const box = partBBox(file.parsed);
+    if (box.w <= 0 || box.h <= 0) continue;
+    
+    const quantity = file.quantity || 1;
+    
+    // Add each copy of the part
+    for (let i = 0; i < quantity; i++) {
+      allParts.push({
+        file: file,
+        width: box.w,
+        height: box.h,
+        partIndex: i,
+        box: box
+      });
+    }
+  }
+  
+  if (allParts.length === 0) {
+    setStatus('Нет деталей для раскладки', 'err');
+    return;
+  }
+  
+  // Perform combined nesting using a simplified bin packing algorithm
+  const combinedLayout = performBinPacking(allParts, W, H, m, g, rots);
+  
+  // Store the combined layout results
+  state.combinedNesting = combinedLayout;
+  state.nesting = null; // Clear single file nesting
+  
+  // Update UI with combined results
+  updateCombinedNestingUI(combinedLayout, allParts);
+}
+
+function performBinPacking(parts, sheetW, sheetH, margin, spacing, rotations) {
+  // Sort parts by area (largest first for better packing)
+  const sortedParts = [...parts].sort((a, b) => (b.width * b.height) - (a.width * a.height));
+  
+  const sheets = [];
+  const usableW = sheetW - 2 * margin;
+  const usableH = sheetH - 2 * spacing;
+  
+  for (const part of sortedParts) {
+    let placed = false;
+    
+    // Try to place in existing sheets first
+    for (const sheet of sheets) {
+      if (tryPlacePartInSheet(part, sheet, usableW, usableH, spacing, rotations)) {
+        placed = true;
+        break;
+      }
+    }
+    
+    // If not placed, create new sheet
+    if (!placed) {
+      const newSheet = {
+        parts: [],
+        occupiedAreas: []
+      };
+      
+      if (tryPlacePartInSheet(part, newSheet, usableW, usableH, spacing, rotations)) {
+        sheets.push(newSheet);
+      }
+    }
+  }
+  
+  return {
+    sheets: sheets,
+    totalSheets: sheets.length,
+    totalParts: parts.length,
+    efficiency: calculatePackingEfficiency(sheets, sheetW, sheetH)
+  };
+}
+
+function tryPlacePartInSheet(part, sheet, maxW, maxH, spacing, rotations) {
+  const orientations = [];
+  
+  // Try different rotations
+  for (const rot of rotations) {
+    if (rot === 0 || rot === 180) {
+      orientations.push({ w: part.width, h: part.height, rotation: rot });
+    } else if (rot === 90 || rot === 270) {
+      orientations.push({ w: part.height, h: part.width, rotation: rot });
+    }
+  }
+  
+  // Try to find a position for each orientation
+  for (const orientation of orientations) {
+    const position = findPositionInSheet(orientation.w, orientation.h, sheet, maxW, maxH, spacing);
+    
+    if (position) {
+      // Place the part
+      const placedPart = {
+        ...part,
+        x: position.x,
+        y: position.y,
+        placedWidth: orientation.w,
+        placedHeight: orientation.h,
+        rotation: orientation.rotation
+      };
+      
+      sheet.parts.push(placedPart);
+      sheet.occupiedAreas.push({
+        x: position.x,
+        y: position.y,
+        w: orientation.w + spacing,
+        h: orientation.h + spacing
+      });
+      
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+function findPositionInSheet(partW, partH, sheet, maxW, maxH, spacing) {
+  // Simple bottom-left placement algorithm
+  const step = 10; // Grid step for positioning
+  
+  for (let y = 0; y <= maxH - partH; y += step) {
+    for (let x = 0; x <= maxW - partW; x += step) {
+      if (isPositionFree(x, y, partW, partH, sheet.occupiedAreas, spacing)) {
+        return { x, y };
+      }
+    }
+  }
+  
+  return null;
+}
+
+function isPositionFree(x, y, w, h, occupiedAreas, spacing) {
+  const testArea = {
+    x: x,
+    y: y,
+    w: w + spacing,
+    h: h + spacing
+  };
+  
+  for (const occupied of occupiedAreas) {
+    if (rectanglesOverlap(testArea, occupied)) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function rectanglesOverlap(rect1, rect2) {
+  return !(rect1.x + rect1.w <= rect2.x || 
+           rect2.x + rect2.w <= rect1.x || 
+           rect1.y + rect1.h <= rect2.y || 
+           rect2.y + rect2.h <= rect1.y);
+}
+
+function calculatePackingEfficiency(sheets, sheetW, sheetH) {
+  if (sheets.length === 0) return 0;
+  
+  let totalUsedArea = 0;
+  for (const sheet of sheets) {
+    for (const part of sheet.parts) {
+      totalUsedArea += part.placedWidth * part.placedHeight;
+    }
+  }
+  
+  const totalSheetArea = sheets.length * sheetW * sheetH;
+  return (totalUsedArea / totalSheetArea) * 100;
+}
+
+function updateCombinedNestingUI(layout, allParts) {
+  const nestCard = document.getElementById('nestCard');
+  if (!nestCard) return;
+  
+  nestCard.hidden = false;
+  $('nPlaced').textContent = allParts.length;
+  $('nSheets').textContent = layout.totalSheets;
+  $('nEff').textContent = layout.efficiency.toFixed(1) + '%';
+  
+  // Calculate combined time and cost
+  let totalTime = 0;
+  let totalCost = 0;
+  
+  // Group parts by file for calculation
+  const fileGroups = {};
+  for (const part of allParts) {
+    const fileId = part.file.id;
+    if (!fileGroups[fileId]) {
+      fileGroups[fileId] = {
+        file: part.file,
+        count: 0
+      };
+    }
+    fileGroups[fileId].count++;
+  }
+  
+  // Calculate time and cost for each file group
+  for (const group of Object.values(fileGroups)) {
+    const file = group.file;
+    if (file.parsed && file.parsed.totalLen && file.parsed.pierceCount) {
+      const th = file.settings.thickness;
+      const power = file.settings.power;
+      const gas = file.settings.gas;
+      const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
+      
+      if (can) {
+        const cutMinPerPart = (file.parsed.totalLen * 1000) / speed;
+        const pierceMinPerPart = (file.parsed.pierceCount * pierce) / 60;
+        const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
+        const timeForAllParts = totalMinPerPart * group.count;
+        
+        const perM = parseFloat($('pPerM').value);
+        const perPierce = parseFloat($('pPierce').value);
+        const gasRubPerMin = parseFloat($('gasPrice').value);
+        const machRubPerHr = parseFloat($('machPrice').value);
+        
+        const cutRubPerPart = perM * file.parsed.totalLen;
+        const pierceRubPerPart = perPierce * file.parsed.pierceCount;
+        const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
+        const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
+        const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
+        const costForAllParts = totalRubPerPart * group.count;
+        
+        totalTime += timeForAllParts;
+        totalCost += costForAllParts;
+      }
+    }
+  }
+  
+  $('nTime').textContent = totalTime.toFixed(2) + ' мин (всего)';
+  $('nCost').textContent = totalCost.toFixed(2) + ' ₽ (всего)';
+  $('nRot').textContent = 'Комбинированная';
+}
+
 function autoCalculateLayout() {
   // Auto-calculate layout for included files with default quantity of 1
   const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
   
   if (includedFiles.length === 0) return;
   
-  // Update multi-file nesting calculations
+  if (includedFiles.length === 1) {
+    // Single file - calculate individual nesting
+    const file = includedFiles[0];
+    calculateIndividualFileNesting(file);
+    
+    // Clear combined nesting
+    state.combinedNesting = null;
+  } else {
+    // Multiple files - perform combined nesting
+    performCombinedNesting(includedFiles);
+    
+    // Clear individual nesting
+    state.nesting = null;
+  }
+  
+  // Update multi-file nesting info
   updateMultiFileNestingInfo();
   
-  // If we have an active file, also calculate its individual nesting
-  const activeFile = getActiveFile();
-  if (activeFile && activeFile.parsed) {
-    calculateIndividualFileNesting(activeFile);
-  }
+  // Update empty layout message
+  updateEmptyLayoutMessage();
 }
 
 function calculateIndividualFileNesting(file) {
@@ -216,13 +472,160 @@ function updateNestingCards(plan, file) {
   $('nRot').textContent = plan.rot + '°';
 }
 
+function drawCombinedNesting(state, canvas) {
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  const layout = state.combinedNesting;
+  if (!layout || layout.sheets.length === 0) {
+    ctx.fillStyle='#7180a3';
+    ctx.font='14px system-ui';
+    ctx.fillText('Комбинированная раскладка не рассчитана', 18, 28);
+    return;
+  }
+  
+  const sheetW = +$('sW').value;
+  const sheetH = +$('sH').value;
+  const margin = +$('margin').value;
+  
+  // Calculate scaling and positioning for all sheets
+  const sheetsPerRow = Math.ceil(Math.sqrt(layout.sheets.length));
+  const sheetRows = Math.ceil(layout.sheets.length / sheetsPerRow);
+  
+  const pad = 20 * (window.devicePixelRatio || 1);
+  const availableW = canvas.width - 2 * pad;
+  const availableH = canvas.height - 2 * pad;
+  
+  const scaleX = availableW / (sheetsPerRow * sheetW + (sheetsPerRow - 1) * 50);
+  const scaleY = availableH / (sheetRows * sheetH + (sheetRows - 1) * 50);
+  const scale = Math.min(scaleX, scaleY);
+  
+  const totalLayoutW = sheetsPerRow * sheetW * scale + (sheetsPerRow - 1) * 50;
+  const totalLayoutH = sheetRows * sheetH * scale + (sheetRows - 1) * 50;
+  const startX = (canvas.width - totalLayoutW) / 2;
+  const startY = (canvas.height - totalLayoutH) / 2;
+  
+  // Draw each sheet
+  layout.sheets.forEach((sheet, sheetIndex) => {
+    const row = Math.floor(sheetIndex / sheetsPerRow);
+    const col = sheetIndex % sheetsPerRow;
+    
+    const sheetX = startX + col * (sheetW * scale + 50);
+    const sheetY = startY + row * (sheetH * scale + 50);
+    
+    // Draw sheet background
+    ctx.fillStyle = '#101828';
+    ctx.strokeStyle = '#2b3753';
+    ctx.lineWidth = 2;
+    ctx.fillRect(sheetX, sheetY, sheetW * scale, sheetH * scale);
+    ctx.strokeRect(sheetX, sheetY, sheetW * scale, sheetH * scale);
+    
+    // Draw margin lines
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#394b78';
+    ctx.strokeRect(
+      sheetX + margin * scale,
+      sheetY + margin * scale,
+      (sheetW - 2 * margin) * scale,
+      (sheetH - 2 * margin) * scale
+    );
+    ctx.setLineDash([]);
+    
+    // Draw parts on this sheet
+    sheet.parts.forEach((part, partIndex) => {
+      const partX = sheetX + (margin + part.x) * scale;
+      const partY = sheetY + (margin + part.y) * scale;
+      const partW = part.placedWidth * scale;
+      const partH = part.placedHeight * scale;
+      
+      // Use different colors for different files
+      const fileIndex = projectState.files.findIndex(f => f.id === part.file.id);
+      const colors = [
+        { fill: 'rgba(109,140,255,0.3)', stroke: '#77a1ff' },
+        { fill: 'rgba(255,140,109,0.3)', stroke: '#ff7751' },
+        { fill: 'rgba(140,255,109,0.3)', stroke: '#77ff51' },
+        { fill: 'rgba(255,109,255,0.3)', stroke: '#ff51ff' },
+        { fill: 'rgba(109,255,255,0.3)', stroke: '#51ffff' },
+        { fill: 'rgba(255,255,109,0.3)', stroke: '#ffff51' }
+      ];
+      const color = colors[fileIndex % colors.length];
+      
+      // Draw part rectangle
+      ctx.fillStyle = color.fill;
+      ctx.strokeStyle = color.stroke;
+      ctx.lineWidth = 1;
+      ctx.fillRect(partX, partY, partW, partH);
+      ctx.strokeRect(partX, partY, partW, partH);
+      
+      // Draw rotation indicator if rotated
+      if (part.rotation !== 0) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${8 * scale}px system-ui`;
+        ctx.fillText(`${part.rotation}°`, partX + 2, partY + 12);
+      }
+      
+      // Draw part label
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${Math.max(8, 10 * scale)}px system-ui`;
+      const label = `${part.file.name.split('.')[0]}`;
+      const labelW = ctx.measureText(label).width;
+      if (labelW < partW - 4) {
+        ctx.fillText(label, partX + 2, partY + partH - 4);
+      }
+    });
+    
+    // Draw sheet number
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${12 * (window.devicePixelRatio || 1)}px system-ui`;
+    ctx.fillText(`Лист ${sheetIndex + 1}`, sheetX + 5, sheetY - 5);
+  });
+  
+  // Draw legend
+  const legendY = canvas.height - 60;
+  const legendX = 20;
+  
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `12px system-ui`;
+  ctx.fillText('Легенда:', legendX, legendY);
+  
+  let legendOffset = 0;
+  projectState.files.filter(f => f.includeInLayout).forEach((file, index) => {
+    const colors = [
+      { fill: 'rgba(109,140,255,0.5)', stroke: '#77a1ff' },
+      { fill: 'rgba(255,140,109,0.5)', stroke: '#ff7751' },
+      { fill: 'rgba(140,255,109,0.5)', stroke: '#77ff51' },
+      { fill: 'rgba(255,109,255,0.5)', stroke: '#ff51ff' },
+      { fill: 'rgba(109,255,255,0.5)', stroke: '#51ffff' },
+      { fill: 'rgba(255,255,109,0.5)', stroke: '#ffff51' }
+    ];
+    const color = colors[index % colors.length];
+    
+    const rectX = legendX + legendOffset;
+    const rectY = legendY + 10;
+    
+    ctx.fillStyle = color.fill;
+    ctx.strokeStyle = color.stroke;
+    ctx.lineWidth = 1;
+    ctx.fillRect(rectX, rectY, 15, 10);
+    ctx.strokeRect(rectX, rectY, 15, 10);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(`${file.name.split('.')[0]} (×${file.quantity || 1})`, rectX + 20, rectY + 8);
+    
+    legendOffset += ctx.measureText(`${file.name.split('.')[0]} (×${file.quantity || 1})`).width + 50;
+  });
+}
+
 function updateEmptyLayoutMessage() {
   const emptyMessage = $('emptyLayoutMessage');
   if (!emptyMessage) return;
   
   // Show the message if we're in the nest tab and have no nesting data
-  // Check both single file nesting and multi-file nesting
-  const hasNestingData = state.nesting || (projectState.multiFileNesting && projectState.multiFileNesting.totalSheets > 0);
+  // Check both single file nesting, multi-file nesting, and combined nesting
+  const hasNestingData = state.nesting || 
+                        state.combinedNesting || 
+                        (projectState.multiFileNesting && projectState.multiFileNesting.totalSheets > 0);
   const showMessage = state.tab === 'nest' && !hasNestingData;
   emptyMessage.classList.toggle('visible', showMessage);
 }
@@ -744,7 +1147,11 @@ function safeDraw(){
     console.log('Drawing with tab:', state.tab, 'entities:', state.parsed?.entities?.length || 0);
     
     if(state.tab==='nest') {
-      drawNesting(state, cv);
+      if (state.combinedNesting) {
+        drawCombinedNesting(state, cv);
+      } else {
+        drawNesting(state, cv);
+      }
       
       // Update empty layout message
       updateEmptyLayoutMessage();
@@ -963,78 +1370,39 @@ function initializeEventHandlers() {
 
   // Nesting
   on($('nest'), 'click', ()=>{
-    if(!state.parsed){ setStatus('Сначала загрузите DXF','err'); return; }
-    const W = +$('sW').value, H = +$('sH').value, m = +$('margin').value, g = +$('spacing').value;
+    // Check if we have multiple files for combined layout
+    const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
     
-    // Use the active file's quantity if available, otherwise use the global quantity
-    let qty = +$('qty').value;
-    const activeFile = getActiveFile();
-    if (activeFile && activeFile.quantity) {
-      qty = activeFile.quantity;
+    if (includedFiles.length === 0) {
+      setStatus('Сначала загрузите DXF файлы', 'err');
+      return;
     }
-    const rotStr = $('rotations').value; const rots = rotStr.split(',').map(s=>parseInt(s.trim(),10)).filter(n=>!Number.isNaN(n));
-    const box = partBBox(state.parsed);
-    if (box.w<=0 || box.h<=0){ setStatus('Не удалось определить габарит детали','err'); return; }
-    const plan = computeNesting(W,H,m,g, qty, box.w, box.h, rots);
-    state.nesting = {...plan, box};
-    document.getElementById('nestCard').hidden = false;
-    $('nPlaced').textContent = plan.placed;
-    $('nSheets').textContent = plan.sheets;
-    const usedArea = plan.placed * (plan.pw * plan.ph);
-    const eff = usedArea / (plan.W*plan.H) * 100;
-    $('nEff').textContent = eff.toFixed(1)+'%';
     
-    // Calculate time and cost per sheet
-    if (state.parsed && state.parsed.totalLen && state.parsed.pierceCount) {
-      const th = parseFloat($('th').value);
-      const power = $('power').value;
-      const gas = $('gas').value;
-      const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
-      
-      if (can) {
-        // Time calculations per part
-        const cutMinPerPart = (state.parsed.totalLen * 1000) / speed;
-        const pierceMinPerPart = (state.parsed.pierceCount * pierce) / 60;
-        const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
-        
-        // Time per sheet (multiply by parts placed on sheet)
-        const timePerSheet = totalMinPerPart * plan.placed;
-        $('nTime').textContent = timePerSheet.toFixed(2) + ' мин';
-        
-        // Cost calculations
-        const perM = parseFloat($('pPerM').value);
-        const perPierce = parseFloat($('pPierce').value);
-        const gasRubPerMin = parseFloat($('gasPrice').value);
-        const machRubPerHr = parseFloat($('machPrice').value);
-        
-        // Cost per part
-        const cutRubPerPart = perM * state.parsed.totalLen;
-        const pierceRubPerPart = perPierce * state.parsed.pierceCount;
-        const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
-        const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
-        const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
-        
-        // Cost per sheet (multiply by parts placed on sheet)
-        const costPerSheet = totalRubPerPart * plan.placed;
-        $('nCost').textContent = costPerSheet.toFixed(2) + ' ₽';
-      } else {
-        $('nTime').textContent = 'Невозможно рассчитать';
-        $('nCost').textContent = 'Невозможно рассчитать';
+    if (includedFiles.length === 1) {
+      // Single file nesting
+      const file = includedFiles[0];
+      if (!file.parsed) {
+        setStatus('Файл не обработан', 'err');
+        return;
       }
+      
+      calculateIndividualFileNesting(file);
+      
+      state.tab = 'nest';
+      document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab==='nest'));
+      updateEmptyLayoutMessage();
+      safeDraw();
+      setStatus('Раскладка готова','ok');
     } else {
-      $('nTime').textContent = 'Нет данных';
-      $('nCost').textContent = 'Нет данных';
+      // Multi-file combined nesting
+      performCombinedNesting(includedFiles);
+      
+      state.tab = 'nest';
+      document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab==='nest'));
+      updateEmptyLayoutMessage();
+      safeDraw();
+      setStatus('Комбинированная раскладка готова','ok');
     }
-    
-    $('nRot').textContent = plan.rot + '°';
-    state.tab = 'nest';
-    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab==='nest'));
-    
-    // Update empty layout message
-    updateEmptyLayoutMessage();
-    
-    safeDraw();
-    setStatus('Раскладка готова','ok');
   });
 
   // Tests
