@@ -352,16 +352,10 @@ function updateCombinedNestingUI(layout, allParts) {
   // Count unique files
   const uniqueFiles = new Set(allParts.map(part => part.file.id));
   
-  // Update unified card elements
-  $('nTotalFiles').textContent = uniqueFiles.size;
-  $('nTotalParts').textContent = allParts.length;
-  $('nPlaced').textContent = allParts.length;
-  $('nSheets').textContent = layout.totalSheets;
-  $('nEff').textContent = layout.efficiency.toFixed(1) + '%';
-  
-  // Calculate combined time and cost
-  let totalTime = 0;
-  let totalCost = 0;
+  // Calculate combined totals for all parts
+  let totalCutLength = 0;
+  let totalPierces = 0;
+  let totalObjects = 0;
   
   // Group parts by file for calculation
   const fileGroups = {};
@@ -375,6 +369,38 @@ function updateCombinedNestingUI(layout, allParts) {
     }
     fileGroups[fileId].count++;
   }
+  
+  // Calculate totals from all file groups
+  for (const group of Object.values(fileGroups)) {
+    const file = group.file;
+    if (file.parsed) {
+      if (file.parsed.totalLen) {
+        totalCutLength += file.parsed.totalLen * group.count;
+      }
+      if (file.parsed.pierceCount) {
+        totalPierces += file.parsed.pierceCount * group.count;
+      }
+      if (file.parsed.entities) {
+        totalObjects += file.parsed.entities.length * group.count;
+      }
+    }
+  }
+  
+  // Update total geometry summary
+  $('nTotalCutLength').textContent = totalCutLength > 0 ? totalCutLength.toFixed(3) + ' м' : '—';
+  $('nTotalPierces').textContent = totalPierces > 0 ? totalPierces : '—';
+  $('nTotalObjects').textContent = totalObjects > 0 ? totalObjects : '—';
+  
+  // Update unified card elements
+  $('nTotalFiles').textContent = uniqueFiles.size;
+  $('nTotalParts').textContent = allParts.length;
+  $('nPlaced').textContent = allParts.length;
+  $('nSheets').textContent = layout.totalSheets;
+  $('nEff').textContent = layout.efficiency.toFixed(1) + '%';
+  
+  // Calculate combined time and cost
+  let totalTime = 0;
+  let totalCost = 0;
   
   // Calculate time and cost for each file group
   for (const group of Object.values(fileGroups)) {
@@ -477,9 +503,20 @@ function updateNestingCards(plan, file) {
   
   nestCard.hidden = false;
   
+  // Calculate total geometry for all placed parts
+  const totalQuantity = file.quantity || 1;
+  const totalCutLength = file.parsed && file.parsed.totalLen ? (file.parsed.totalLen * totalQuantity).toFixed(3) + ' м' : '—';
+  const totalPierces = file.parsed && file.parsed.pierceCount ? (file.parsed.pierceCount * totalQuantity) : '—';
+  const totalObjects = file.parsed && file.parsed.entities ? (file.parsed.entities.length * totalQuantity) : '—';
+  
+  // Update total geometry summary
+  $('nTotalCutLength').textContent = totalCutLength;
+  $('nTotalPierces').textContent = totalPierces;
+  $('nTotalObjects').textContent = totalObjects;
+  
   // Single file layout - update unified card elements
   $('nTotalFiles').textContent = '1';
-  $('nTotalParts').textContent = file.quantity || 1;
+  $('nTotalParts').textContent = totalQuantity;
   $('nPlaced').textContent = plan.placed;
   $('nSheets').textContent = plan.sheets;
   
