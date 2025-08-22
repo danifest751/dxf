@@ -422,8 +422,8 @@ function updateCombinedNestingUI(layout, allParts) {
         const gasRubPerMin = parseFloat($('gasPrice').value);
         const machRubPerHr = parseFloat($('machPrice').value);
         
-        const cutRubPerPart = perM * file.parsed.totalLen;
-        const pierceRubPerPart = perPierce * file.parsed.pierceCount;
+        const cutRubPerPart = perM * file.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
+        const pierceRubPerPart = perPierce * file.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
         const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
         const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
         const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
@@ -546,8 +546,8 @@ function updateNestingCards(plan, file) {
       const gasRubPerMin = parseFloat($('gasPrice').value);
       const machRubPerHr = parseFloat($('machPrice').value);
       
-      const cutRubPerPart = perM * file.parsed.totalLen;
-      const pierceRubPerPart = perPierce * file.parsed.pierceCount;
+      const cutRubPerPart = perM * file.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
+      const pierceRubPerPart = perPierce * file.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
       const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
       const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
       const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
@@ -1791,8 +1791,8 @@ function updateCards(){
     const pierceMin = can ? (state.parsed.pierceCount * pierce) / 60 : 0;
     const totalMin = cutMin + pierceMin;
 
-    const cutRub = perM * state.parsed.totalLen;
-    const pierceRub = perPierce * state.parsed.pierceCount;
+    const cutRub = perM * state.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
+    const pierceRub = perPierce * state.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
     const gasRub = gasRubPerMin * totalMin * (gasCons ? gasCons/4 : 1);
     const machRub = (machRubPerHr/60) * totalMin;
     const totalRub = cutRub + pierceRub + gasRub + machRub;
