@@ -1,14 +1,8 @@
 export function createAnnotatedDXF(orig, parsed){
   const DXF_LINE_LIMIT = 255; // Standard DXF line length limit
-  const MAX_ANNOTATIONS = 10000; // Prevent excessive annotations
-  
-  // Validate input
-  if (!orig || !parsed) return orig || '';
-  if (!parsed.entities || !Array.isArray(parsed.entities)) return orig;
   
   // Helper function to split long lines
   const wrapLine = (line) => {
-    if (!line || typeof line !== 'string') return [''];
     if (line.length <= DXF_LINE_LIMIT) return [line];
     const lines = [];
     for (let i = 0; i < line.length; i += DXF_LINE_LIMIT) {
@@ -17,53 +11,24 @@ export function createAnnotatedDXF(orig, parsed){
     return lines;
   };
   
-  // Safe number formatting
-  const safeFixed = (num, digits = 3) => {
-    if (typeof num !== 'number' || !isFinite(num)) return '0';
-    return num.toFixed(digits);
-  };
-  
   let ann = `\n; === АННОТАЦИИ ЛАЗЕРНОЙ РЕЗКИ ===\n`;
   ann += `; Объектов: ${parsed.entities.length}\n`;
-  ann += `; Общая длина: ${safeFixed(parsed.totalLen)} м\n`;
-  ann += `; Врезок: ${parsed.pierceCount || 0}\n`;
+  ann += `; Общая длина: ${parsed.totalLen.toFixed(3)} м\n`;
+  ann += `; Врезок: ${parsed.pierceCount}\n`;
   
-  // Limit annotations to prevent excessive output
-  const entityCount = Math.min(parsed.entities.length, MAX_ANNOTATIONS);
-  for (let i = 0; i < entityCount; i++) {
-    const e = parsed.entities[i];
-    if (!e) continue;
-    
-    const startX = safeFixed(e.start?.[0] || 0, 2);
-    const startY = safeFixed(e.start?.[1] || 0, 2);
-    const length = safeFixed(e.len || 0);
-    
-    const line = `; ${i+1}) ${e.type || 'UNKNOWN'} L=${length}м @ X=${startX} Y=${startY}`;
+  parsed.entities.forEach((e,i)=>{ 
+    if(!e) return; 
+    const line = `; ${i+1}) ${e.type} L=${(e.len||0).toFixed(3)}м @ X=${(e.start?.[0]||0).toFixed(2)} Y=${(e.start?.[1]||0).toFixed(2)}`;
     const wrappedLines = wrapLine(line);
     ann += wrappedLines.join('\n') + '\n';
-  }
+  });
   
-  if (parsed.entities.length > MAX_ANNOTATIONS) {
-    ann += `; ... и ещё ${parsed.entities.length - MAX_ANNOTATIONS} объектов\n`;
-  }
-  
-  // Pierce points annotations
-  const piercePts = parsed.piercePts || [];
-  const pierceCount = Math.min(piercePts.length, MAX_ANNOTATIONS);
-  for (let i = 0; i < pierceCount; i++) {
-    const p = piercePts[i];
-    if (!p || !Array.isArray(p) || p.length < 2) continue;
-    
-    const x = safeFixed(p[0], 2);
-    const y = safeFixed(p[1], 2);
-    const line = `; P${i+1} X=${x} Y=${y}`;
+  (parsed.piercePts||[]).forEach((p,i)=>{ 
+    if(!p) return; 
+    const line = `; P${i+1} X=${p[0].toFixed(2)} Y=${p[1].toFixed(2)}`;
     const wrappedLines = wrapLine(line);
     ann += wrappedLines.join('\n') + '\n';
-  }
-  
-  if (piercePts.length > MAX_ANNOTATIONS) {
-    ann += `; ... и ещё ${piercePts.length - MAX_ANNOTATIONS} точек врезки\n`;
-  }
+  });
   
   return orig + ann;
 }
