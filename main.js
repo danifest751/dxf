@@ -84,6 +84,50 @@ function setActiveFile(fileId) {
 }
 
 // Multi-file management functions
+function updateFileNavigationButtons() {
+  const prevBtn = $('prevFileBtn');
+  const nextBtn = $('nextFileBtn');
+  
+  if (!prevBtn || !nextBtn || projectState.files.length <= 1) {
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+    return;
+  }
+  
+  const currentIndex = projectState.files.findIndex(f => f.id === projectState.activeFileId);
+  if (currentIndex === -1) {
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+  
+  prevBtn.disabled = currentIndex === 0;
+  nextBtn.disabled = currentIndex === projectState.files.length - 1;
+}
+
+function navigateToNextFile() {
+  const currentIndex = projectState.files.findIndex(f => f.id === projectState.activeFileId);
+  if (currentIndex === -1 || currentIndex >= projectState.files.length - 1) return;
+  
+  setActiveFile(projectState.files[currentIndex + 1].id);
+}
+
+function navigateToPrevFile() {
+  const currentIndex = projectState.files.findIndex(f => f.id === projectState.activeFileId);
+  if (currentIndex <= 0) return;
+  
+  setActiveFile(projectState.files[currentIndex - 1].id);
+}
+
+function updateEmptyLayoutMessage() {
+  const emptyMessage = $('emptyLayoutMessage');
+  if (!emptyMessage) return;
+  
+  // Show the message if we're in the nest tab and have no nesting data
+  const showMessage = state.tab === 'nest' && !state.nesting;
+  emptyMessage.classList.toggle('visible', showMessage);
+}
+
 function updateActiveFileUI() {
   const activeFile = getActiveFile();
   if (activeFile) {
@@ -120,6 +164,18 @@ function updateActiveFileUI() {
   if (multiFileNestBtn) {
     multiFileNestBtn.disabled = projectState.files.length === 0;
   }
+  
+  // Update calculate button state
+  const calcFileBtn = $('calcFileBtn');
+  if (calcFileBtn) {
+    calcFileBtn.disabled = !activeFile || !activeFile.parsed;
+  }
+  
+  // Update navigation buttons
+  updateFileNavigationButtons();
+  
+  // Update empty layout message
+  updateEmptyLayoutMessage();
 }
 
 function createFileTab(file) {
@@ -457,9 +513,17 @@ async function initializeApp() {
     
     // Initialize button states
     const multiFileNestBtn = $('multiFileNestBtn');
-    if (multiFileNestBtn) {
-      multiFileNestBtn.disabled = true; // Disabled initially since no files are loaded
-    }
+    const calcFileBtn = $('calcFileBtn');
+    const prevFileBtn = $('prevFileBtn');
+    const nextFileBtn = $('nextFileBtn');
+    
+    if (multiFileNestBtn) multiFileNestBtn.disabled = true;
+    if (calcFileBtn) calcFileBtn.disabled = true;
+    if (prevFileBtn) prevFileBtn.disabled = true;
+    if (nextFileBtn) nextFileBtn.disabled = true;
+    
+    // Initialize empty layout message
+    updateEmptyLayoutMessage();
     
     console.log('App initialized successfully');
     setStatus('Готово к работе', 'ok');
@@ -578,6 +642,9 @@ function safeDraw(){
     
     if(state.tab==='nest') {
       drawNesting(state, cv);
+      
+      // Update empty layout message
+      updateEmptyLayoutMessage();
     } else {
       drawEntities(state, cv, state.tab==='annot');
     }
@@ -591,7 +658,36 @@ function safeDraw(){
 
 function initializeEventHandlers() {
   // Tabs
-  document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>{ state.tab=t.dataset.tab; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t)); safeDraw() }));
+  document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>{ 
+    state.tab=t.dataset.tab; 
+    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t)); 
+    // Update empty layout message when switching tabs
+    updateEmptyLayoutMessage();
+    safeDraw(); 
+  }));
+  
+  // File navigation buttons
+  const prevFileBtn = $('prevFileBtn');
+  const nextFileBtn = $('nextFileBtn');
+  if (prevFileBtn) {
+    on(prevFileBtn, 'click', () => navigateToPrevFile());
+  }
+  if (nextFileBtn) {
+    on(nextFileBtn, 'click', () => navigateToNextFile());
+  }
+  
+  // Calculate button in file header
+  const calcFileBtn = $('calcFileBtn');
+  if (calcFileBtn) {
+    on(calcFileBtn, 'click', () => {
+      if(!state.parsed) return;
+      recomputeParams();
+      updateCards();
+      state.tab='annot';
+      document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab==='annot'));
+      safeDraw();
+    });
+  }
 
   // Export section toggle functionality with state persistence
   const exportToggle = $('exportToggle');
@@ -828,6 +924,10 @@ function initializeEventHandlers() {
     $('nRot').textContent = plan.rot + '°';
     state.tab = 'nest';
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab==='nest'));
+    
+    // Update empty layout message
+    updateEmptyLayoutMessage();
+    
     safeDraw();
     setStatus('Раскладка готова','ok');
   });
@@ -868,6 +968,10 @@ function initializeEventHandlers() {
       // Show the nesting tab
       state.tab = 'nest';
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'nest'));
+      
+      // Update the empty layout message
+      updateEmptyLayoutMessage();
+      
       safeDraw();
       
       setStatus('Раскладка выбранных файлов готова', 'ok');

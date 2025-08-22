@@ -33,6 +33,7 @@
           <div class="file-tabs-header">
             <span class="tabs-title">📁 Файлы:</span>
             <div class="file-tabs-actions">
+              <button id="calcFileBtn" class="btn btn-small" title="Посчитать активный файл">🔄 Посчитать</button>
               <button id="multiFileNestBtn" class="btn btn-small" title="Раскладка выбранных файлов">📦 Раскладка</button>
               <button id="addFileBtn" class="btn btn-small" title="Добавить файл">➕</button>
             </div>
@@ -115,7 +116,7 @@
             </select>
           </div>
           <div style="display:flex; align-items:flex-end; gap:8px">
-            <button id="calc" class="btn primary" disabled>🔄 Посчитать</button>
+            <button id="calc" class="btn primary" disabled style="display: none;">🔄 Посчитать</button>
             <button id="nest" class="btn" disabled style="display: none;">📦 Раскладка</button>
           </div>
         </div>
@@ -148,11 +149,22 @@
           <div class="tab active" data-tab="orig">Исходный DXF</div>
           <div class="tab" data-tab="annot">Аннотированный</div>
           <div class="tab" data-tab="nest">Раскладка</div>
+          <div class="file-navigation">
+            <button id="prevFileBtn" class="nav-btn" title="Предыдущий файл" disabled>◀</button>
+            <button id="nextFileBtn" class="nav-btn" title="Следующий файл" disabled>▶</button>
+          </div>
           <div style="margin-left:auto;padding:10px 12px" class="pill" id="zoomHint">Колесо: зум, ЛКМ: панорама</div>
         </div>
         <div class="canvas-holder">
           <canvas id="cv"></canvas>
           <div id="tooltip" class="tooltip" style="display:none"></div>
+          <div id="emptyLayoutMessage" class="empty-layout-message">
+            <div class="message-content">
+              <div class="message-icon">📊</div>
+              <h3>Раскладка не рассчитана</h3>
+              <p>Нажмите кнопку "Раскладка" для расчета размещения деталей на листе</p>
+            </div>
+          </div>
         </div>
       </div>
 
