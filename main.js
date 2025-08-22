@@ -62,10 +62,11 @@ function saveCurrentConfig() {
       power: $('power')?.value,
       gas: $('gas')?.value,
       thickness: $('th')?.value,
-      pricePerMeter: $('pPerM')?.value,
-      pricePerPierce: $('pPierce')?.value,
-      gasPricePerMinute: $('gasPrice')?.value,
-      machineHourPrice: $('machPrice')?.value,
+      // Pricing fields are now readonly and managed by config file
+      // pricePerMeter: $('pPerM')?.value,
+      // pricePerPierce: $('pPierce')?.value,
+      // gasPricePerMinute: $('gasPrice')?.value,
+      // machineHourPrice: $('machPrice')?.value,
       sheetWidth: $('sW')?.value,
       sheetHeight: $('sH')?.value,
       margin: $('margin')?.value,
@@ -91,10 +92,6 @@ function applyConfigurationToElements() {
     power: $('power'),
     gas: $('gas'),
     thickness: $('th'),
-    pricePerMeter: $('pPerM'),
-    pricePerPierce: $('pPierce'),
-    gasPricePerMinute: $('gasPrice'),
-    machineHourPrice: $('machPrice'),
     sheetWidth: $('sW'),
     sheetHeight: $('sH'),
     margin: $('margin'),
@@ -103,7 +100,19 @@ function applyConfigurationToElements() {
     rotations: $('rotations')
   };
   
+  // Apply configuration to editable elements
   applyConfigToForm(elements);
+  
+  // Apply readonly pricing values from config
+  const pricePerMeter = getConfig()?.pricing?.pricePerMeter || 100;
+  const pricePerPierce = getConfig()?.pricing?.pricePerPierce || 50;
+  const gasPricePerMinute = getConfig()?.pricing?.gasPricePerMinute || 15;
+  const machineHourPrice = getConfig()?.pricing?.machineHourPrice || 500;
+  
+  if ($('pPerM')) $('pPerM').value = pricePerMeter;
+  if ($('pPierce')) $('pPierce').value = pricePerPierce;
+  if ($('gasPrice')) $('gasPrice').value = gasPricePerMinute;
+  if ($('machPrice')) $('machPrice').value = machineHourPrice;
   
   // Update calculated fields after applying config
   if (state.parsed) {
@@ -165,11 +174,11 @@ function initializeEventHandlers() {
   on($('power'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} saveCurrentConfig();});
   on($('gas'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} saveCurrentConfig();});
   
-  // Save config when pricing changes
-  on($('pPerM'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
-  on($('pPierce'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
-  on($('gasPrice'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
-  on($('machPrice'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  // Save config when pricing changes - removed for readonly fields
+  // on($('pPerM'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  // on($('pPierce'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  // on($('gasPrice'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  // on($('machPrice'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
   
   // Save config when sheet parameters change
   on($('sW'),'input',saveCurrentConfig);
