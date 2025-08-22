@@ -126,8 +126,49 @@ function initializeEventHandlers() {
     const usedArea = plan.placed * (plan.pw * plan.ph);
     const eff = usedArea / (plan.W*plan.H) * 100;
     $('nEff').textContent = eff.toFixed(1)+'%';
-    $('nTime').textContent = '—';
-    $('nCost').textContent = '—';
+    
+    // Calculate time and cost per sheet
+    if (state.parsed && state.parsed.totalLen && state.parsed.pierceCount) {
+      const th = parseFloat($('th').value);
+      const power = $('power').value;
+      const gas = $('gas').value;
+      const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
+      
+      if (can) {
+        // Time calculations per part
+        const cutMinPerPart = (state.parsed.totalLen * 1000) / speed;
+        const pierceMinPerPart = (state.parsed.pierceCount * pierce) / 60;
+        const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
+        
+        // Time per sheet (multiply by parts placed on sheet)
+        const timePerSheet = totalMinPerPart * plan.placed;
+        $('nTime').textContent = timePerSheet.toFixed(2) + ' мин';
+        
+        // Cost calculations
+        const perM = parseFloat($('pPerM').value);
+        const perPierce = parseFloat($('pPierce').value);
+        const gasRubPerMin = parseFloat($('gasPrice').value);
+        const machRubPerHr = parseFloat($('machPrice').value);
+        
+        // Cost per part
+        const cutRubPerPart = perM * state.parsed.totalLen;
+        const pierceRubPerPart = perPierce * state.parsed.pierceCount;
+        const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
+        const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
+        const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
+        
+        // Cost per sheet (multiply by parts placed on sheet)
+        const costPerSheet = totalRubPerPart * plan.placed;
+        $('nCost').textContent = costPerSheet.toFixed(2) + ' ₽';
+      } else {
+        $('nTime').textContent = 'Невозможно рассчитать';
+        $('nCost').textContent = 'Невозможно рассчитать';
+      }
+    } else {
+      $('nTime').textContent = 'Нет данных';
+      $('nCost').textContent = 'Нет данных';
+    }
+    
     $('nRot').textContent = plan.rot + '°';
     state.tab = 'nest';
     document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab==='nest'));
