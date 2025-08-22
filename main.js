@@ -8,8 +8,208 @@ import { makeRunTests } from './tests.js';
 import { loadConfig, applyConfigToForm, getConfig, loadConfigFromStorage } from './config-loader.js';
 import { perfMonitor, measurePerformance } from './performance.js';
 
+// Multi-file project state
+const projectState = {
+  files: [], // Array of file objects
+  activeFileId: null,
+  nextFileId: 1
+};
+
+// Legacy state for backward compatibility
 const state={rawDXF:'', parsed:null, tab:'orig', pan:{x:0,y:0}, zoom:1, nesting:null, paths:[], piercePaths:[], index:null};
 let cv = null;
+
+// File object structure
+function createFileObject(file, content) {
+  return {
+    id: `file_${projectState.nextFileId++}`,
+    name: file.name,
+    originalName: file.name,
+    rawDXF: content,
+    parsed: null,
+    paths: [],
+    piercePaths: [],
+    index: null,
+    visible: true,
+    settings: {
+      thickness: parseFloat($('th')?.value || '3'),
+      power: $('power')?.value || '1.5',
+      gas: $('gas')?.value || 'nitrogen'
+    },
+    calculations: null,
+    nesting: null,
+    tab: 'orig',
+    pan: {x: 0, y: 0},
+    zoom: 1
+  };
+}
+
+// Multi-file management functions
+function updateActiveFileUI() {
+  const activeFile = getActiveFile();
+  if (activeFile) {
+    // Update file tabs
+    document.querySelectorAll('.file-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.fileId === activeFile.id);
+    });
+    
+    // Update settings from file
+    const elements = {
+      th: $('th'),
+      power: $('power'),
+      gas: $('gas')
+    };
+    
+    if (elements.th) elements.th.value = activeFile.settings.thickness;
+    if (elements.power) elements.power.value = activeFile.settings.power;
+    if (elements.gas) elements.gas.value = activeFile.settings.gas;
+    
+    // Update tabs (orig/annot/nest)
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === activeFile.tab);
+    });
+    
+    // Clear calculation cache when switching files
+    calculationCache.lastParams = null;
+    calculationCache.lastResult = null;
+  }
+}
+
+function createFileTab(file) {
+  const tab = document.createElement('div');
+  tab.className = 'file-tab';
+  tab.dataset.fileId = file.id;
+  
+  const fileName = document.createElement('span');
+  fileName.className = 'file-tab-name';
+  fileName.textContent = file.name;
+  fileName.title = file.name;
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'file-tab-close';
+  closeBtn.innerHTML = '✕';
+  closeBtn.title = 'Закрыть файл';
+  
+  tab.appendChild(fileName);
+  tab.appendChild(closeBtn);
+  
+  // Tab click event
+  on(tab, 'click', (e) => {
+    if (e.target !== closeBtn) {
+      setActiveFile(file.id);
+    }
+  });
+  
+  // Close button event
+  on(closeBtn, 'click', (e) => {
+    e.stopPropagation();
+    removeFile(file.id);
+  });
+  
+  return tab;
+}
+
+function addFileToProject(file, content) {
+  const fileObj = createFileObject(file, content);
+  projectState.files.push(fileObj);
+  
+  // Add tab to UI
+  const tabsList = $('fileTabsList');
+  if (tabsList) {
+    const tab = createFileTab(fileObj);
+    tabsList.appendChild(tab);
+  }
+  
+  // Show tabs container
+  const tabsContainer = $('fileTabs');
+  if (tabsContainer) {
+    tabsContainer.style.display = 'block';
+  }
+  
+  // Set as active if it's the first file
+  if (projectState.files.length === 1) {
+    setActiveFile(fileObj.id);
+  }
+  
+  return fileObj;
+}
+
+function removeFile(fileId) {
+  const fileIndex = projectState.files.findIndex(f => f.id === fileId);
+  if (fileIndex === -1) return;
+  
+  const wasActive = projectState.activeFileId === fileId;
+  
+  // Remove from array
+  projectState.files.splice(fileIndex, 1);
+  
+  // Remove tab from UI
+  const tab = document.querySelector(`[data-file-id="${fileId}"]`);
+  if (tab) tab.remove();
+  
+  // Hide tabs container if no files
+  if (projectState.files.length === 0) {
+    const tabsContainer = $('fileTabs');
+    if (tabsContainer) tabsContainer.style.display = 'none';
+    
+    // Reset state
+    projectState.activeFileId = null;
+    state.rawDXF = '';
+    state.parsed = null;
+    state.paths = [];
+    state.piercePaths = [];
+    state.index = null;
+    
+    // Clear UI
+    updateCards();
+    safeDraw();
+    
+    // Disable buttons
+    ['calc','nest','dlOrig','dlAnn','dlDXFMarkers','dlSVG','dlCSV','dlReport'].forEach(id => {
+      const el = $(id); 
+      if (el) el.disabled = true;
+    });
+    const dlContainer = $('dl');
+    if (dlContainer) dlContainer.hidden = true;
+    
+  } else if (wasActive) {
+    // Set new active file (prefer next, fallback to previous)
+    const newActiveIndex = Math.min(fileIndex, projectState.files.length - 1);
+    setActiveFile(projectState.files[newActiveIndex].id);
+  }
+}
+
+// Set active file and sync state
+function setActiveFile(fileId) {
+  const file = projectState.files.find(f => f.id === fileId);
+  if (file) {
+    // Save current state to active file
+    const currentActive = getActiveFile();
+    if (currentActive) {
+      currentActive.tab = state.tab;
+      currentActive.pan = {...state.pan};
+      currentActive.zoom = state.zoom;
+      currentActive.nesting = state.nesting;
+    }
+    
+    // Load new active file state
+    projectState.activeFileId = fileId;
+    state.rawDXF = file.rawDXF;
+    state.parsed = file.parsed;
+    state.paths = file.paths;
+    state.piercePaths = file.piercePaths;
+    state.index = file.index;
+    state.tab = file.tab;
+    state.pan = {...file.pan};
+    state.zoom = file.zoom;
+    state.nesting = file.nesting;
+    
+    // Update UI
+    updateActiveFileUI();
+    updateCards();
+    safeDraw();
+  }
+}
 
 async function initializeApp() {
   cv = $('cv');
@@ -234,10 +434,43 @@ function initializeEventHandlers() {
     });
   }
 
-  // UI events with config saving (debounced for performance)
-  on($('th'),'change',()=>{ if(state.parsed) { recomputeParams(); updateCards(); } debouncedSaveConfig(); });
-  on($('power'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} debouncedSaveConfig();});
-  on($('gas'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} debouncedSaveConfig();});
+  // UI events with config saving (debounced for performance) + file settings update
+  on($('th'),'change',()=>{ 
+    if(state.parsed) { 
+      recomputeParams(); 
+      updateCards(); 
+      // Save setting to active file
+      const activeFile = getActiveFile();
+      if (activeFile) {
+        activeFile.settings.thickness = parseFloat($('th').value);
+      }
+    } 
+    debouncedSaveConfig(); 
+  });
+  on($('power'),'change',()=>{
+    if(state.parsed){
+      recomputeParams();
+      updateCards();
+      // Save setting to active file
+      const activeFile = getActiveFile();
+      if (activeFile) {
+        activeFile.settings.power = $('power').value;
+      }
+    } 
+    debouncedSaveConfig();
+  });
+  on($('gas'),'change',()=>{
+    if(state.parsed){
+      recomputeParams();
+      updateCards();
+      // Save setting to active file
+      const activeFile = getActiveFile();
+      if (activeFile) {
+        activeFile.settings.gas = $('gas').value;
+      }
+    } 
+    debouncedSaveConfig();
+  });
   
   // Save config when pricing changes - removed for readonly fields
   // on($('pPerM'),'input',()=>{if(state.parsed) updateCards(); debouncedSaveConfig();});
@@ -263,13 +496,36 @@ function initializeEventHandlers() {
   on($('dlCSV'),'click',()=>downloadText('entities.csv',createCSV(state.parsed)));
   on($('dlReport'),'click',()=>downloadText('nesting_report.txt', makeNestingReport(state)));
 
-  // Drag & drop / file
+  // Drag & drop / file handling for multiple files
   const drop=$('drop');
   on(drop,'dragover',e=>{e.preventDefault(); drop.style.borderColor='#6d8cff'});
   on(drop,'dragleave',()=>drop.style.borderColor='#44507a');
-  on(drop,'drop',e=>{e.preventDefault(); drop.style.borderColor='#44507a'; const f=e.dataTransfer.files?.[0]; if(f) loadFile(f) });
-  on(drop,'click',()=>$('file').click()); // Add click handler for file selection
-  on($('file'),'change',e=>{ const f=e.target.files?.[0]; if(f) loadFile(f) });
+  on(drop,'drop',e=>{
+    e.preventDefault(); 
+    drop.style.borderColor='#44507a'; 
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.dxf'));
+    if(files.length > 0) {
+      loadFiles(files);
+    } else {
+      setStatus('Пожалуйста, выберите DXF файлы', 'err');
+    }
+  });
+  on(drop,'click',()=>$('file').click());
+  on($('file'),'change',e=>{ 
+    const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.dxf'));
+    if(files.length > 0) {
+      loadFiles(files);
+    }
+    try{ $('file').value=''; }catch{}
+  });
+  
+  // Add file button
+  const addFileBtn = $('addFileBtn');
+  if (addFileBtn) {
+    on(addFileBtn, 'click', () => {
+      $('file').click();
+    });
+  }
 
   // Nesting
   on($('nest'), 'click', ()=>{
@@ -377,22 +633,23 @@ async function parseDXF(content){
   return parseDXFMainThread(content);
 }
 
-// Load file
-async function loadFile(f){
+// Load single file (updated for multi-file support)
+async function loadFile(file){
   try{
-    console.log('Loading file:', f.name, 'size:', f.size);
-    setStatus('Чтение файла…','warn');
+    console.log('Loading file:', file.name, 'size:', file.size);
+    setStatus(`Загрузка ${file.name}...`,'warn');
     
     perfMonitor.startTimer('file_load_total');
     perfMonitor.startTimer('file_read');
-    const txt = await f.text();
+    const txt = await file.text();
     perfMonitor.endTimer('file_read');
     
     console.log('File read, content length:', txt.length);
-    state.rawDXF = txt;
-    try{ $('file').value=''; }catch{}
     
-    setStatus('Парсинг DXF…','warn');
+    // Add file to project
+    const fileObj = addFileToProject(file, txt);
+    
+    setStatus(`Парсинг ${file.name}...`,'warn');
     
     const parsed = await measurePerformance('dxf_parsing', async () => {
       return sanitizeParsed(await parseDXF(txt));
@@ -401,26 +658,96 @@ async function loadFile(f){
     console.log('DXF parsed, entities:', parsed?.entities?.length || 0);
     
     if (!parsed || !parsed.entities || parsed.entities.length === 0) {
-      throw new Error('Не найдено объектов в DXF файле');
+      throw new Error(`Не найдено объектов в ${file.name}`);
     }
     
-    state.parsed = parsed;
-    console.log('Building paths...');
+    // Update file object with parsed data
+    fileObj.parsed = parsed;
+    
+    console.log('Building paths for', file.name);
     
     measurePerformance('path_building', () => {
-      buildPaths(state);
+      // Build paths for this file
+      const ents = parsed?.entities || [];
+      fileObj.paths = [];
+      fileObj.piercePaths = [];
+      
+      for(let i = 0; i < ents.length; i++){
+        const e = ents[i];
+        if (!e || !e.raw) {
+          fileObj.paths.push(new Path2D());
+          continue;
+        }
+        
+        const p = new Path2D();
+        try {
+          if(e.type==='LINE'){
+            const {x1,y1,x2,y2}=e.raw; 
+            if ([x1,y1,x2,y2].every(Number.isFinite)) {
+              p.moveTo(x1,y1); p.lineTo(x2,y2);
+            }
+          }else if(e.type==='CIRCLE'){
+            const {cx,cy,r}=e.raw; 
+            if ([cx,cy,r].every(Number.isFinite) && r > 0) {
+              p.moveTo(cx+r,cy); p.arc(cx,cy,r,0,Math.PI*2,false);
+            }
+          }else if(e.type==='ARC'){
+            const {cx,cy,r,a1=0,a2=0}=e.raw;
+            if ([cx,cy,r,a1,a2].every(Number.isFinite) && r > 0) {
+              let A1=a1*Math.PI/180, A2=a2*Math.PI/180; let d=A2-A1; if(d<0) d+=2*Math.PI;
+              const steps = Math.max(24, Math.min(360, Math.ceil((r*d)/1.5)));
+              for(let k=0;k<=steps;k++){
+                const a=A1 + d*(k/steps); const x=cx + r*Math.cos(a); const y=cy + r*Math.sin(a);
+                if(k===0) p.moveTo(x,y); else p.lineTo(x,y);
+              }
+            }
+          }else if(e.type==='POLY'){
+            const pts=e.raw.pts||[]; 
+            if(pts.length && pts.every(pt => Number.isFinite(pt.x) && Number.isFinite(pt.y))){ 
+              p.moveTo(pts[0].x,pts[0].y); 
+              for(let j=1;j<pts.length;j++) p.lineTo(pts[j].x,pts[j].y); 
+              if(e.raw.closed) p.closePath(); 
+            }
+          }
+        } catch (pathError) {
+          console.error('Error creating path for entity', i, ':', pathError);
+        }
+        fileObj.paths.push(p);
+      }
+      
+      // Build pierce paths
+      const piercePts = parsed?.piercePts||[];
+      for(const pt of piercePts){
+        if (!pt || !Array.isArray(pt) || pt.length < 2) continue;
+        if (!Number.isFinite(pt[0]) || !Number.isFinite(pt[1])) continue;
+        
+        try {
+          const pp = new Path2D();
+          const r=3; 
+          pp.moveTo(pt[0]+r,pt[1]); 
+          pp.arc(pt[0],pt[1],r,0,Math.PI*2,false);
+          fileObj.piercePaths.push(pp);
+        } catch (pierceError) {
+          console.error('Error creating pierce path:', pierceError);
+        }
+      }
     });
     
-    console.log('Paths built, count:', state.paths?.length || 0);
+    console.log('Paths built, count:', fileObj.paths?.length || 0);
     
+    // Set as active file
+    setActiveFile(fileObj.id);
+    
+    // Enable buttons
     ['calc','nest','dlOrig','dlAnn','dlDXFMarkers','dlSVG','dlCSV','dlReport'].forEach(id=>{ const el = $(id); if(el) el.disabled=false; });
+    
+    // Handle export section visibility
     const dlContainer = $('dl');
     const exportContent = $('exportContent');
     if (dlContainer) {
       dlContainer.hidden = false;
-      // Check saved state before auto-expanding
       const savedExportState = localStorage.getItem('exportSectionExpanded');
-      const shouldExpand = savedExportState ? JSON.parse(savedExportState) : true; // Default to expanded when file loads
+      const shouldExpand = savedExportState ? JSON.parse(savedExportState) : true;
       
       if (exportContent && shouldExpand) {
         exportContent.style.display = 'block';
@@ -453,13 +780,26 @@ async function loadFile(f){
     
     perfMonitor.endTimer('file_load_total');
     
-    console.log('File loaded successfully');
+    console.log('File loaded successfully:', file.name);
     console.log('Performance report:', perfMonitor.getReport());
-    setStatus(`Готово: объектов — ${parsed.entities.length}, длина — ${parsed.totalLen.toFixed(3)} м, врезок — ${parsed.pierceCount}`,'ok');
+    setStatus(`Готово: ${file.name} - объектов: ${parsed.entities.length}, длина: ${parsed.totalLen.toFixed(3)} м`,'ok');
   }catch(err){
-    console.error('Error loading file:', err);
-    setStatus('Ошибка: '+(err?.message||String(err)),'err');
+    console.error('Error loading file:', file.name, err);
+    setStatus(`Ошибка в ${file.name}: `+(err?.message||String(err)),'err');
   }
+}
+
+// Load multiple files
+async function loadFiles(files) {
+  if (!files || files.length === 0) return;
+  
+  setStatus(`Загрузка ${files.length} файлов...`, 'warn');
+  
+  for (let i = 0; i < files.length; i++) {
+    await loadFile(files[i]);
+  }
+  
+  setStatus(`Успешно загружено ${files.length} файлов`, 'ok');
 }
 
 // Cost/time
