@@ -44,6 +44,43 @@ function createFileObject(file, content) {
   };
 }
 
+// Get active file
+function getActiveFile() {
+  return projectState.files.find(f => f.id === projectState.activeFileId);
+}
+
+// Set active file and sync state
+function setActiveFile(fileId) {
+  const file = projectState.files.find(f => f.id === fileId);
+  if (file) {
+    // Save current state to active file
+    const currentActive = getActiveFile();
+    if (currentActive) {
+      currentActive.tab = state.tab;
+      currentActive.pan = {...state.pan};
+      currentActive.zoom = state.zoom;
+      currentActive.nesting = state.nesting;
+    }
+    
+    // Load new active file state
+    projectState.activeFileId = fileId;
+    state.rawDXF = file.rawDXF;
+    state.parsed = file.parsed;
+    state.paths = file.paths;
+    state.piercePaths = file.piercePaths;
+    state.index = file.index;
+    state.tab = file.tab;
+    state.pan = {...file.pan};
+    state.zoom = file.zoom;
+    state.nesting = file.nesting;
+    
+    // Update UI
+    updateActiveFileUI();
+    updateCards();
+    safeDraw();
+  }
+}
+
 // Multi-file management functions
 function updateActiveFileUI() {
   const activeFile = getActiveFile();
@@ -176,38 +213,6 @@ function removeFile(fileId) {
     // Set new active file (prefer next, fallback to previous)
     const newActiveIndex = Math.min(fileIndex, projectState.files.length - 1);
     setActiveFile(projectState.files[newActiveIndex].id);
-  }
-}
-
-// Set active file and sync state
-function setActiveFile(fileId) {
-  const file = projectState.files.find(f => f.id === fileId);
-  if (file) {
-    // Save current state to active file
-    const currentActive = getActiveFile();
-    if (currentActive) {
-      currentActive.tab = state.tab;
-      currentActive.pan = {...state.pan};
-      currentActive.zoom = state.zoom;
-      currentActive.nesting = state.nesting;
-    }
-    
-    // Load new active file state
-    projectState.activeFileId = fileId;
-    state.rawDXF = file.rawDXF;
-    state.parsed = file.parsed;
-    state.paths = file.paths;
-    state.piercePaths = file.piercePaths;
-    state.index = file.index;
-    state.tab = file.tab;
-    state.pan = {...file.pan};
-    state.zoom = file.zoom;
-    state.nesting = file.nesting;
-    
-    // Update UI
-    updateActiveFileUI();
-    updateCards();
-    safeDraw();
   }
 }
 
