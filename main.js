@@ -76,6 +76,11 @@ function setActiveFile(fileId) {
     state.zoom = file.zoom;
     state.nesting = file.nesting;
     
+    // Update nesting cards if we have nesting data
+    if (file.nesting) {
+      updateNestingCards(file.nesting, file);
+    }
+    
     // Update UI
     updateActiveFileUI();
     updateCards();
@@ -118,6 +123,97 @@ function navigateToPrevFile() {
   if (currentIndex <= 0) return;
   
   setActiveFile(projectState.files[currentIndex - 1].id);
+}
+
+function autoCalculateLayout() {
+  // Auto-calculate layout for included files with default quantity of 1
+  const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
+  
+  if (includedFiles.length === 0) return;
+  
+  // Update multi-file nesting calculations
+  updateMultiFileNestingInfo();
+  
+  // If we have an active file, also calculate its individual nesting
+  const activeFile = getActiveFile();
+  if (activeFile && activeFile.parsed) {
+    calculateIndividualFileNesting(activeFile);
+  }
+}
+
+function calculateIndividualFileNesting(file) {
+  const W = +$('sW').value;
+  const H = +$('sH').value;
+  const m = +$('margin').value;
+  const g = +$('spacing').value;
+  const rotStr = $('rotations').value;
+  const rots = rotStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !Number.isNaN(n));
+  
+  const box = partBBox(file.parsed);
+  if (box.w <= 0 || box.h <= 0) return;
+  
+  const qty = file.quantity || 1;
+  const plan = computeNesting(W, H, m, g, qty, box.w, box.h, rots);
+  
+  // Store nesting data in the file and current state
+  file.nesting = {...plan, box};
+  if (file.id === projectState.activeFileId) {
+    state.nesting = file.nesting;
+  }
+  
+  // Update UI if this is the active file
+  if (file.id === projectState.activeFileId) {
+    updateNestingCards(plan, file);
+  }
+}
+
+function updateNestingCards(plan, file) {
+  const nestCard = document.getElementById('nestCard');
+  if (!nestCard) return;
+  
+  nestCard.hidden = false;
+  $('nPlaced').textContent = plan.placed;
+  $('nSheets').textContent = plan.sheets;
+  const usedArea = plan.placed * (plan.pw * plan.ph);
+  const eff = usedArea / (plan.W * plan.H) * 100;
+  $('nEff').textContent = eff.toFixed(1) + '%';
+  
+  // Calculate time and cost per sheet
+  if (file.parsed && file.parsed.totalLen && file.parsed.pierceCount) {
+    const th = file.settings.thickness;
+    const power = file.settings.power;
+    const gas = file.settings.gas;
+    const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
+    
+    if (can) {
+      const cutMinPerPart = (file.parsed.totalLen * 1000) / speed;
+      const pierceMinPerPart = (file.parsed.pierceCount * pierce) / 60;
+      const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
+      const timePerSheet = totalMinPerPart * plan.placed;
+      $('nTime').textContent = timePerSheet.toFixed(2) + ' мин';
+      
+      const perM = parseFloat($('pPerM').value);
+      const perPierce = parseFloat($('pPierce').value);
+      const gasRubPerMin = parseFloat($('gasPrice').value);
+      const machRubPerHr = parseFloat($('machPrice').value);
+      
+      const cutRubPerPart = perM * file.parsed.totalLen;
+      const pierceRubPerPart = perPierce * file.parsed.pierceCount;
+      const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
+      const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
+      const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
+      const costPerSheet = totalRubPerPart * plan.placed;
+      $('nCost').textContent = costPerSheet.toFixed(2) + ' ₽';
+    } else {
+      $('nTime').textContent = 'Невозможно рассчитать';
+      $('nCost').textContent = 'Невозможно рассчитать';
+    }
+  } else {
+    $('nTime').textContent = 'Нет данных';
+    $('nCost').textContent = 'Нет данных';
+  }
+  
+  $('nRot').textContent = plan.rot + '°';
 }
 
 function updateEmptyLayoutMessage() {
@@ -169,9 +265,15 @@ function updateActiveFileUI() {
   }
   
   // Update calculate button state
-  const calcFileBtn = $('calcFileBtn');
-  if (calcFileBtn) {
-    calcFileBtn.disabled = !activeFile || !activeFile.parsed;
+  const calcBtn = $('calc');
+  if (calcBtn) {
+    calcBtn.disabled = !activeFile || !activeFile.parsed;
+  }
+  
+  // Update nest button state
+  const nestBtn = $('nest');
+  if (nestBtn) {
+    nestBtn.disabled = !activeFile || !activeFile.parsed;
   }
   
   // Update navigation buttons
@@ -244,8 +346,8 @@ function createFileTab(file) {
     e.stopPropagation();
     file.includeInLayout = e.target.checked;
     
-    // Update multi-file nesting calculations
-    updateMultiFileNestingInfo();
+    // Auto-recalculate layout when inclusion changes
+    autoCalculateLayout();
   });
   
   // Quantity input event
@@ -255,8 +357,8 @@ function createFileTab(file) {
     file.quantity = Math.max(1, Math.min(999, newQuantity));
     e.target.value = file.quantity;
     
-    // Update global nesting calculations if needed
-    updateMultiFileNestingInfo();
+    // Auto-recalculate layout when quantity changes
+    autoCalculateLayout();
   });
   
   // Close button event
@@ -298,6 +400,9 @@ function addFileToProject(file, content) {
   
   // Update multi-file nesting info
   updateMultiFileNestingInfo();
+  
+  // Auto-calculate layout for the new file
+  autoCalculateLayout();
   
   return fileObj;
 }
@@ -469,16 +574,6 @@ function calculateMultiFileNesting() {
   updateEmptyLayoutMessage();
 }
 
-function performGlobalNesting() {
-  setStatus('Глобальная раскладка в разработке', 'warn');
-  
-  // Future implementation would:
-  // 1. Collect all parts from all files with their quantities
-  // 2. Run nesting algorithm on combined set
-  // 3. Show optimized layout across multiple sheets
-  // 4. Display results with assignment of parts to sheets
-}
-
 async function initializeApp() {
   cv = $('cv');
   if (!cv) {
@@ -519,12 +614,14 @@ async function initializeApp() {
     
     // Initialize button states
     const multiFileNestBtn = $('multiFileNestBtn');
-    const calcFileBtn = $('calcFileBtn');
+    const calcBtn = $('calc');
+    const nestBtn = $('nest');
     const prevFileBtn = $('prevFileBtn');
     const nextFileBtn = $('nextFileBtn');
     
     if (multiFileNestBtn) multiFileNestBtn.disabled = true;
-    if (calcFileBtn) calcFileBtn.disabled = true;
+    if (calcBtn) calcBtn.disabled = true;
+    if (nestBtn) nestBtn.disabled = true;
     if (prevFileBtn) prevFileBtn.disabled = true;
     if (nextFileBtn) nextFileBtn.disabled = true;
     
@@ -682,18 +779,20 @@ function initializeEventHandlers() {
     on(nextFileBtn, 'click', () => navigateToNextFile());
   }
   
-  // Calculate button in file header
-  const calcFileBtn = $('calcFileBtn');
-  if (calcFileBtn) {
-    on(calcFileBtn, 'click', () => {
-      if(!state.parsed) return;
-      recomputeParams();
-      updateCards();
-      state.tab='annot';
-      document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab==='annot'));
-      safeDraw();
-    });
-  }
+  // Calculate button in main area
+  on($('calc'), 'click', () => {
+    if(!state.parsed) return;
+    recomputeParams();
+    updateCards();
+    state.tab='annot';
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab==='annot'));
+    safeDraw();
+  });
+  
+  // Open DXF button
+  on($('openBtn'), 'click', () => {
+    $('file').click();
+  });
 
   // Export section toggle functionality with state persistence
   const exportToggle = $('exportToggle');
@@ -813,8 +912,8 @@ function initializeEventHandlers() {
         tabQuantityInput.value = activeFile.quantity;
       }
       
-      // Update multi-file nesting calculations
-      updateMultiFileNestingInfo();
+      // Auto-recalculate layout when quantity changes
+      autoCalculateLayout();
     }
     debouncedSaveConfig();
   });
@@ -946,47 +1045,9 @@ function initializeEventHandlers() {
   const calculateMultiFileBtn = $('calculateMultiFile');
   if (calculateMultiFileBtn) {
     on(calculateMultiFileBtn, 'click', () => {
-      updateMultiFileNestingInfo();
+      autoCalculateLayout();
       setStatus('Мультифайловая раскладка пересчитана', 'ok');
     });
-  }
-  
-  const multiFileNestBtn = $('multiFileNestBtn');
-  if (multiFileNestBtn) {
-    on(multiFileNestBtn, 'click', () => {
-      // Check if we have any files to include in layout
-      const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
-      
-      if (includedFiles.length === 0) {
-        setStatus('Нет файлов для раскладки. Пожалуйста, выберите файлы с помощью флажков.', 'err');
-        return;
-      }
-      
-      // Update multi-file nesting calculations
-      updateMultiFileNestingInfo();
-      
-      // Show the multi-file card
-      const multiFileCard = $('multiFileCard');
-      if (multiFileCard) {
-        multiFileCard.style.display = 'block';
-      }
-      
-      // Show the nesting tab
-      state.tab = 'nest';
-      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'nest'));
-      
-      // Update the empty layout message
-      updateEmptyLayoutMessage();
-      
-      safeDraw();
-      
-      setStatus('Раскладка выбранных файлов готова', 'ok');
-    });
-  }
-  
-  const globalNestingBtn = $('globalNesting');
-  if (globalNestingBtn) {
-    on(globalNestingBtn, 'click', performGlobalNesting);
   }
 
   // Init
