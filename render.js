@@ -1,5 +1,15 @@
 import { dpr, screenToWorld, clamp } from './utils.js';
 
+// Debounced drawing for better performance
+let drawTimeout = null;
+function debouncedDraw(onDraw) {
+  if (drawTimeout) return; // Already scheduled
+  drawTimeout = requestAnimationFrame(() => {
+    onDraw();
+    drawTimeout = null;
+  });
+}
+
 export function initCanvasInteractions(state, canvas, onDraw){
   if (!canvas) {
     throw new Error('Canvas element is null or undefined');
@@ -52,7 +62,9 @@ export function initCanvasInteractions(state, canvas, onDraw){
     if(dragging){
       const dx=e.clientX-last.x, dy=e.clientY-last.y;
       last={x:e.clientX,y:e.clientY};
-      state.pan.x+=dx; state.pan.y+=dy; onDraw(); return;
+      state.pan.x+=dx; state.pan.y+=dy; 
+      debouncedDraw(onDraw); 
+      return;
     }
     if(!state.index) return;
     const pt = screenToWorld(state, canvas, e.clientX, e.clientY);
@@ -61,7 +73,7 @@ export function initCanvasInteractions(state, canvas, onDraw){
     if(found){
       showTooltip(e.clientX, e.clientY, tooltipText(state, found));
     }else hideTooltip();
-    onDraw();
+    debouncedDraw(onDraw);
   }, {passive:true});
   canvas.addEventListener('wheel',e=>{
     e.preventDefault();
@@ -73,7 +85,8 @@ export function initCanvasInteractions(state, canvas, onDraw){
     state.zoom*=k; state.zoom=clamp(state.zoom,0.05,50);
     const nx=x*state.zoom*dpr+state.pan.x;
     const ny=canvas.height-(y*state.zoom*dpr+state.pan.y);
-    state.pan.x+=mx-nx; state.pan.y+=my-ny; onDraw();
+    state.pan.x+=mx-nx; state.pan.y+=my-ny; 
+    debouncedDraw(onDraw);
   }, {passive:false});
 }
 
@@ -96,8 +109,35 @@ function hideTooltip(){
   if(tt) tt.style.display='none';
 }
 
+// Path object pool for memory optimization
+const pathPool = [];
+function getPath() {
+  return pathPool.pop() || new Path2D();
+}
+function releasePath(path) {
+  // Reset the path and return to pool
+  try {
+    path.rect(0, 0, 0, 0); // Clear the path
+    pathPool.push(path);
+  } catch (e) {
+    // If path is corrupted, don't add to pool
+  }
+}
+
 export function buildPaths(state){
   console.log('Building paths for', state.parsed?.entities?.length || 0, 'entities');
+  
+  // Release old paths to pool before creating new ones
+  if (state.paths) {
+    state.paths.forEach(path => {
+      if (path instanceof Path2D) releasePath(path);
+    });
+  }
+  if (state.piercePaths) {
+    state.piercePaths.forEach(path => {
+      if (path instanceof Path2D) releasePath(path);
+    });
+  }
   
   state.paths = [];
   state.piercePaths = [];
@@ -113,11 +153,11 @@ export function buildPaths(state){
     const e = ents[i];
     if (!e || !e.raw) {
       console.warn('Invalid entity at index', i, e);
-      state.paths.push(new Path2D()); // Add empty path to maintain index alignment
+      state.paths.push(getPath()); // Add empty path to maintain index alignment
       continue;
     }
     
-    const p = new Path2D();
+    const p = getPath(); // Use pooled path
     try {
       if(e.type==='LINE'){
         const {x1,y1,x2,y2}=e.raw; 
@@ -176,7 +216,7 @@ export function buildPaths(state){
     }
     
     try {
-      const pp = new Path2D();
+      const pp = getPath(); // Use pooled path
       const r=3; 
       pp.moveTo(pt[0]+r,pt[1]); 
       pp.arc(pt[0],pt[1],r,0,Math.PI*2,false);

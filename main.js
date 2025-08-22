@@ -6,6 +6,7 @@ import { partBBox, computeNesting, drawNesting, makeNestingReport } from './nest
 import { createAnnotatedDXF, createDXFWithMarkers, createSVG, createCSV, downloadText } from './annotate.js';
 import { makeRunTests } from './tests.js';
 import { loadConfig, applyConfigToForm, getConfig, loadConfigFromStorage } from './config-loader.js';
+import { perfMonitor, measurePerformance } from './performance.js';
 
 const state={rawDXF:'', parsed:null, tab:'orig', pan:{x:0,y:0}, zoom:1, nesting:null, paths:[], piercePaths:[], index:null};
 let cv = null;
@@ -53,6 +54,16 @@ async function initializeApp() {
     console.error('Error initializing app:', e);
     setStatus('Ошибка инициализации: ' + e.message, 'err');
   }
+}
+
+// Debounced config saving to prevent excessive localStorage writes
+let saveConfigTimeout = null;
+function debouncedSaveConfig() {
+  if (saveConfigTimeout) clearTimeout(saveConfigTimeout);
+  saveConfigTimeout = setTimeout(() => {
+    saveCurrentConfig();
+    saveConfigTimeout = null;
+  }, 300); // 300ms debounce
 }
 
 // Save current form values to configuration
@@ -169,24 +180,24 @@ function initializeEventHandlers() {
   // Tabs
   document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>{ state.tab=t.dataset.tab; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t)); safeDraw() }));
 
-  // UI events with config saving
-  on($('th'),'change',()=>{ if(state.parsed) { recomputeParams(); updateCards(); } saveCurrentConfig(); });
-  on($('power'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} saveCurrentConfig();});
-  on($('gas'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} saveCurrentConfig();});
+  // UI events with config saving (debounced for performance)
+  on($('th'),'change',()=>{ if(state.parsed) { recomputeParams(); updateCards(); } debouncedSaveConfig(); });
+  on($('power'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} debouncedSaveConfig();});
+  on($('gas'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} debouncedSaveConfig();});
   
   // Save config when pricing changes - removed for readonly fields
-  // on($('pPerM'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
-  // on($('pPierce'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
-  // on($('gasPrice'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
-  // on($('machPrice'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  // on($('pPerM'),'input',()=>{if(state.parsed) updateCards(); debouncedSaveConfig();});
+  // on($('pPierce'),'input',()=>{if(state.parsed) updateCards(); debouncedSaveConfig();});
+  // on($('gasPrice'),'input',()=>{if(state.parsed) updateCards(); debouncedSaveConfig();});
+  // on($('machPrice'),'input',()=>{if(state.parsed) updateCards(); debouncedSaveConfig();});
   
-  // Save config when sheet parameters change
-  on($('sW'),'input',saveCurrentConfig);
-  on($('sH'),'input',saveCurrentConfig);
-  on($('margin'),'input',saveCurrentConfig);
-  on($('spacing'),'input',saveCurrentConfig);
-  on($('qty'),'input',saveCurrentConfig);
-  on($('rotations'),'change',saveCurrentConfig);
+  // Save config when sheet parameters change (debounced)
+  on($('sW'),'input',debouncedSaveConfig);
+  on($('sH'),'input',debouncedSaveConfig);
+  on($('margin'),'input',debouncedSaveConfig);
+  on($('spacing'),'input',debouncedSaveConfig);
+  on($('qty'),'input',debouncedSaveConfig);
+  on($('rotations'),'change',debouncedSaveConfig);
   
   on($('calc'),'click',()=>{ if(!state.parsed) return; recomputeParams(); updateCards(); state.tab='annot'; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab==='annot')); safeDraw() });
 
@@ -317,13 +328,22 @@ async function loadFile(f){
   try{
     console.log('Loading file:', f.name, 'size:', f.size);
     setStatus('Чтение файла…','warn');
+    
+    perfMonitor.startTimer('file_load_total');
+    perfMonitor.startTimer('file_read');
     const txt = await f.text();
+    perfMonitor.endTimer('file_read');
+    
     console.log('File read, content length:', txt.length);
     state.rawDXF = txt;
     try{ $('file').value=''; }catch{}
     
     setStatus('Парсинг DXF…','warn');
-    const parsed = sanitizeParsed(await parseDXF(txt));
+    
+    const parsed = await measurePerformance('dxf_parsing', async () => {
+      return sanitizeParsed(await parseDXF(txt));
+    });
+    
     console.log('DXF parsed, entities:', parsed?.entities?.length || 0);
     
     if (!parsed || !parsed.entities || parsed.entities.length === 0) {
@@ -332,22 +352,35 @@ async function loadFile(f){
     
     state.parsed = parsed;
     console.log('Building paths...');
-    buildPaths(state);
+    
+    measurePerformance('path_building', () => {
+      buildPaths(state);
+    });
+    
     console.log('Paths built, count:', state.paths?.length || 0);
     
     ['calc','nest','dlOrig','dlAnn','dlDXFMarkers','dlSVG','dlCSV','dlReport'].forEach(id=>{ const el = $(id); if(el) el.disabled=false; });
     if ($('dl')) $('dl').hidden=false;
     
     console.log('Updating cards...');
-    updateCards();
+    measurePerformance('cards_update', () => {
+      updateCards();
+    });
     
     console.log('Fitting view...');
-    fitView(state, cv); 
+    measurePerformance('view_fit', () => {
+      fitView(state, cv);
+    });
     
     console.log('Drawing...');
-    safeDraw();
+    measurePerformance('initial_draw', () => {
+      safeDraw();
+    });
+    
+    perfMonitor.endTimer('file_load_total');
     
     console.log('File loaded successfully');
+    console.log('Performance report:', perfMonitor.getReport());
     setStatus(`Готово: объектов — ${parsed.entities.length}, длина — ${parsed.totalLen.toFixed(3)} м, врезок — ${parsed.pierceCount}`,'ok');
   }catch(err){
     console.error('Error loading file:', err);
@@ -362,39 +395,95 @@ function recomputeParams(){
   const gas = $('gas').value;
   const cp = calcCutParams(power, th, gas);
   
+  // Clear calculation cache when parameters change
+  calculationCache.lastParams = null;
+  calculationCache.lastResult = null;
+  
   // Display the thickness-specific cutting speed
   $('cutSpd').value = cp.can ? cp.speed : 0;
   $('pierceSec').value = cp.can ? cp.pierce.toFixed(2) : 0;
 }
+// Cached calculation results to avoid redundant computations
+let calculationCache = {
+  lastParams: null,
+  lastResult: null
+};
+
 function updateCards(){
   if(!state.parsed) return;
-  const th=parseFloat($('th').value), power=$('power').value, gas=$('gas').value;
-  const {can,speed,pierce,gasCons} = calcCutParams(power, th, gas);
-  const perM=parseFloat($('pPerM').value), perPierce=parseFloat($('pPierce').value), gasRubPerMin=parseFloat($('gasPrice').value), machRubPerHr=parseFloat($('machPrice').value);
+  
+  // Cache DOM elements to avoid repeated queries
+  const elements = {
+    th: $('th'),
+    power: $('power'),
+    gas: $('gas'),
+    pPerM: $('pPerM'),
+    pPierce: $('pPierce'),
+    gasPrice: $('gasPrice'),
+    machPrice: $('machPrice')
+  };
+  
+  const th = parseFloat(elements.th.value);
+  const power = elements.power.value;
+  const gas = elements.gas.value;
+  
+  // Create cache key for parameters
+  const paramKey = `${th}-${power}-${gas}-${state.parsed.totalLen}-${state.parsed.pierceCount}`;
+  
+  let calculations;
+  if (calculationCache.lastParams === paramKey) {
+    // Use cached calculations
+    calculations = calculationCache.lastResult;
+  } else {
+    // Perform new calculations and cache them
+    const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
+    const perM = parseFloat(elements.pPerM.value);
+    const perPierce = parseFloat(elements.pPierce.value);
+    const gasRubPerMin = parseFloat(elements.gasPrice.value);
+    const machRubPerHr = parseFloat(elements.machPrice.value);
 
-  const cutMin = can ? (state.parsed.totalLen*1000) / speed : 0;
-  const pierceMin = can ? (state.parsed.pierceCount * pierce) / 60 : 0;
-  const totalMin = cutMin + pierceMin;
+    const cutMin = can ? (state.parsed.totalLen * 1000) / speed : 0;
+    const pierceMin = can ? (state.parsed.pierceCount * pierce) / 60 : 0;
+    const totalMin = cutMin + pierceMin;
 
-  const cutRub = perM * state.parsed.totalLen;
-  const pierceRub = perPierce * state.parsed.pierceCount;
-  const gasRub = gasRubPerMin * totalMin * (gasCons?gasCons/4:1);
-  const machRub = (machRubPerHr/60) * totalMin;
-  const totalRub = cutRub + pierceRub + gasRub + machRub;
+    const cutRub = perM * state.parsed.totalLen;
+    const pierceRub = perPierce * state.parsed.pierceCount;
+    const gasRub = gasRubPerMin * totalMin * (gasCons ? gasCons/4 : 1);
+    const machRub = (machRubPerHr/60) * totalMin;
+    const totalRub = cutRub + pierceRub + gasRub + machRub;
+    
+    calculations = {
+      cutMin, pierceMin, totalMin,
+      cutRub, pierceRub, gasRub, machRub, totalRub
+    };
+    
+    // Cache the results
+    calculationCache.lastParams = paramKey;
+    calculationCache.lastResult = calculations;
+  }
 
-  $('mLen').textContent = (state.parsed.totalLen).toFixed(3)+' м';
-  $('mPierce').textContent = state.parsed.pierceCount;
-  $('mEnt').textContent = state.parsed.entities.length;
-
-  $('mCutMin').textContent = (cutMin).toFixed(2)+' мин';
-  $('mPierceMin').textContent = (pierceMin).toFixed(2)+' мин';
-  $('mTotalMin').textContent = (totalMin).toFixed(2)+' мин';
-
-  $('mCutRub').textContent = (cutRub).toFixed(2)+' ₽';
-  $('mPierceRub').textContent = (pierceRub).toFixed(2)+' ₽';
-  $('mGasRub').textContent = (gasRub).toFixed(2)+' ₽';
-  $('mMachRub').textContent = (machRub).toFixed(2)+' ₽';
-  $('mTotalRub').textContent = (totalRub).toFixed(2)+' ₽';
+  // Batch DOM updates to minimize reflows
+  const updates = {
+    'mLen': (state.parsed.totalLen).toFixed(3) + ' м',
+    'mPierce': state.parsed.pierceCount,
+    'mEnt': state.parsed.entities.length,
+    'mCutMin': calculations.cutMin.toFixed(2) + ' мин',
+    'mPierceMin': calculations.pierceMin.toFixed(2) + ' мин',
+    'mTotalMin': calculations.totalMin.toFixed(2) + ' мин',
+    'mCutRub': calculations.cutRub.toFixed(2) + ' ₽',
+    'mPierceRub': calculations.pierceRub.toFixed(2) + ' ₽',
+    'mGasRub': calculations.gasRub.toFixed(2) + ' ₽',
+    'mMachRub': calculations.machRub.toFixed(2) + ' ₽',
+    'mTotalRub': calculations.totalRub.toFixed(2) + ' ₽'
+  };
+  
+  // Apply all updates in a single batch
+  requestAnimationFrame(() => {
+    for (const [id, text] of Object.entries(updates)) {
+      const element = $(id);
+      if (element) element.textContent = text;
+    }
+  });
 }
 
 // Note: Nesting and Tests handlers moved to initializeEventHandlers function to avoid duplicates
