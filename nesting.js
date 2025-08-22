@@ -19,6 +19,8 @@ function bounds(ents){
 }
 export function computeGrid(W,H,m,g,pw,ph, qty){
   const workW = W - 2*m, workH = H - 2*m;
+  // Validate quantity - must be positive
+  if (qty < 0) qty = 0;
   if (workW<=0 || workH<=0 || pw<=0 || ph<=0) return {cols:0,rows:0,placed:0,positions:[]};
   const cols = Math.max(0, Math.floor((workW + g) / (pw + g)));
   const rows = Math.max(0, Math.floor((workH + g) / (ph + g)));

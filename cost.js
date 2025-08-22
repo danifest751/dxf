@@ -11,6 +11,9 @@ export function calcCutParams(power, th, gas){
   const P = CUT[power]; 
   if(!P) return {can:false, reason:"Нет данных по мощности"};
   
+  // Validate thickness - must be positive and realistic
+  if (th <= 0) return {can:false, reason:"Недопустимая толщина металла"};
+  
   const max = P.max[gas]; 
   if(th > max) return {can:false, reason:`Недостаточная мощность для ${th} мм (${gas})`};
   

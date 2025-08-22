@@ -1,10 +1,35 @@
 export function createAnnotatedDXF(orig, parsed){
+  const DXF_LINE_LIMIT = 255; // Standard DXF line length limit
+  
+  // Helper function to split long lines
+  const wrapLine = (line) => {
+    if (line.length <= DXF_LINE_LIMIT) return [line];
+    const lines = [];
+    for (let i = 0; i < line.length; i += DXF_LINE_LIMIT) {
+      lines.push(line.substring(i, i + DXF_LINE_LIMIT));
+    }
+    return lines;
+  };
+  
   let ann = `\n; === АННОТАЦИИ ЛАЗЕРНОЙ РЕЗКИ ===\n`;
   ann += `; Объектов: ${parsed.entities.length}\n`;
   ann += `; Общая длина: ${parsed.totalLen.toFixed(3)} м\n`;
   ann += `; Врезок: ${parsed.pierceCount}\n`;
-  parsed.entities.forEach((e,i)=>{ if(!e) return; ann += `; ${i+1}) ${e.type} L=${(e.len||0).toFixed(3)}м @ X=${(e.start?.[0]||0).toFixed(2)} Y=${(e.start?.[1]||0).toFixed(2)}\n` });
-  (parsed.piercePts||[]).forEach((p,i)=>{ if(!p) return; ann += `; P${i+1} X=${p[0].toFixed(2)} Y=${p[1].toFixed(2)}\n` });
+  
+  parsed.entities.forEach((e,i)=>{ 
+    if(!e) return; 
+    const line = `; ${i+1}) ${e.type} L=${(e.len||0).toFixed(3)}м @ X=${(e.start?.[0]||0).toFixed(2)} Y=${(e.start?.[1]||0).toFixed(2)}`;
+    const wrappedLines = wrapLine(line);
+    ann += wrappedLines.join('\n') + '\n';
+  });
+  
+  (parsed.piercePts||[]).forEach((p,i)=>{ 
+    if(!p) return; 
+    const line = `; P${i+1} X=${p[0].toFixed(2)} Y=${p[1].toFixed(2)}`;
+    const wrappedLines = wrapLine(line);
+    ann += wrappedLines.join('\n') + '\n';
+  });
+  
   return orig + ann;
 }
 export function createDXFWithMarkers(orig, parsed, radius=0.5){

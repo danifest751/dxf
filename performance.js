@@ -2,7 +2,11 @@
 export class PerformanceMonitor {
   constructor() {
     this.metrics = new Map();
-    this.enabled = false; // Set to true to enable monitoring
+    // Only enable in development mode or when explicitly requested
+    this.enabled = (typeof window !== 'undefined' && 
+                   (window.location.hostname === 'localhost' || 
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.search.includes('debug=true'))) ? false : false; // Default disabled
   }
   
   startTimer(name) {

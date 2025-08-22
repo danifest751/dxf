@@ -19,6 +19,41 @@ const projectState = {
 const state={rawDXF:'', parsed:null, tab:'orig', pan:{x:0,y:0}, zoom:1, nesting:null, paths:[], piercePaths:[], index:null};
 let cv = null;
 
+// State synchronization validator
+function validateStateSynchronization() {
+  const warnings = [];
+  
+  // Check if active file state is synchronized with global state
+  const activeFile = getActiveFile();
+  if (activeFile) {
+    if (activeFile.tab !== state.tab) {
+      warnings.push('Tab state desynchronized');
+    }
+    if (JSON.stringify(activeFile.pan) !== JSON.stringify(state.pan)) {
+      warnings.push('Pan state desynchronized');
+    }
+    if (activeFile.zoom !== state.zoom) {
+      warnings.push('Zoom state desynchronized');
+    }
+  }
+  
+  // Check config-dependent calculations cache
+  if (calculationCache.lastParams && state.parsed) {
+    const currentParams = `${$('th')?.value}-${$('power')?.value}-${$('gas')?.value}`;
+    if (!calculationCache.lastParams.includes(currentParams)) {
+      console.log('Config change detected, invalidating calculation cache');
+      calculationCache.lastParams = null;
+      calculationCache.lastResult = null;
+    }
+  }
+  
+  if (warnings.length > 0) {
+    console.warn('State synchronization warnings:', warnings);
+  }
+  
+  return warnings.length === 0;
+}
+
 // File object structure
 function createFileObject(file, content) {
   return {
@@ -75,6 +110,9 @@ function setActiveFile(fileId) {
     state.pan = {...file.pan};
     state.zoom = file.zoom;
     state.nesting = file.nesting;
+    
+    // Validate state synchronization
+    validateStateSynchronization();
     
     // Update nesting cards if we have nesting data
     if (file.nesting) {

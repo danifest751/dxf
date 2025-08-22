@@ -36,6 +36,65 @@ const defaultConfig = {
 };
 
 /**
+ * Validate configuration object structure and values
+ * @param {Object} cfg - Configuration to validate
+ * @returns {Object} Validation result with isValid and errors
+ */
+function validateConfig(cfg) {
+  const errors = [];
+  const warnings = [];
+  
+  if (!cfg || typeof cfg !== 'object') {
+    errors.push('Configuration must be an object');
+    return { isValid: false, errors, warnings };
+  }
+  
+  // Validate cutting parameters
+  if (cfg.cutting) {
+    const validPowers = ['0.5', '1.0', '1.5', '2.0'];
+    if (cfg.cutting.power && !validPowers.includes(String(cfg.cutting.power))) {
+      warnings.push(`Invalid power value: ${cfg.cutting.power}. Valid values: ${validPowers.join(', ')}`);
+    }
+    
+    const validGases = ['oxygen', 'nitrogen', 'air'];
+    if (cfg.cutting.gas && !validGases.includes(cfg.cutting.gas)) {
+      warnings.push(`Invalid gas value: ${cfg.cutting.gas}. Valid values: ${validGases.join(', ')}`);
+    }
+    
+    const validThicknesses = [0.5, 0.6, 0.7, 0.8, 1, 1.5, 2, 3, 5, 6];
+    if (cfg.cutting.thickness && !validThicknesses.includes(Number(cfg.cutting.thickness))) {
+      warnings.push(`Invalid thickness: ${cfg.cutting.thickness}. Valid values: ${validThicknesses.join(', ')}`);
+    }
+  }
+  
+  // Validate pricing parameters
+  if (cfg.pricing) {
+    const priceFields = ['pricePerMeter', 'pricePerPierce', 'gasPricePerMinute', 'machineHourPrice'];
+    priceFields.forEach(field => {
+      if (cfg.pricing[field] && (isNaN(cfg.pricing[field]) || cfg.pricing[field] < 0)) {
+        warnings.push(`Invalid ${field}: must be a positive number`);
+      }
+    });
+  }
+  
+  // Validate sheet parameters
+  if (cfg.sheet) {
+    const sheetFields = ['width', 'height', 'margin', 'spacing'];
+    sheetFields.forEach(field => {
+      if (cfg.sheet[field] && (isNaN(cfg.sheet[field]) || cfg.sheet[field] <= 0)) {
+        warnings.push(`Invalid sheet ${field}: must be a positive number`);
+      }
+    });
+    
+    if (cfg.sheet.quantity && (isNaN(cfg.sheet.quantity) || cfg.sheet.quantity < 1)) {
+      warnings.push('Invalid quantity: must be a positive integer >= 1');
+    }
+  }
+  
+  return { isValid: errors.length === 0, errors, warnings };
+}
+
+/**
  * Load configuration from config.json file
  * @returns {Promise<Object>} Configuration object
  */
@@ -48,8 +107,21 @@ export async function loadConfig() {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    config = await response.json();
-    console.log('Configuration loaded successfully:', config);
+    const loadedConfig = await response.json();
+    
+    // Validate loaded configuration
+    const validation = validateConfig(loadedConfig);
+    if (!validation.isValid) {
+      console.error('Configuration validation errors:', validation.errors);
+      throw new Error(`Invalid configuration: ${validation.errors.join(', ')}`);
+    }
+    
+    if (validation.warnings.length > 0) {
+      console.warn('Configuration validation warnings:', validation.warnings);
+    }
+    
+    config = loadedConfig;
+    console.log('Configuration loaded and validated successfully:', config);
     return config;
   } catch (error) {
     console.warn('Failed to load config.json, using default configuration:', error);
