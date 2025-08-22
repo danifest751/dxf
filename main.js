@@ -551,8 +551,8 @@ function updateNestingCards(plan, file) {
       const gasRubPerMin = parseFloat($('gasPrice').value);
       const machRubPerHr = parseFloat($('machPrice').value);
       
-      const cutRubPerPart = perM * file.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
-      const pierceRubPerPart = perPierce * file.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
+      const cutRubPerPart = perM * file.parsed.totalLen;
+      const pierceRubPerPart = perPierce * file.parsed.pierceCount;
       const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
       const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
       const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
