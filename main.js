@@ -1355,6 +1355,8 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.thickness = parseFloat($('th').value);
       }
+      // Recalculate nesting when thickness changes
+      autoCalculateLayout();
     } 
     debouncedSaveConfig(); 
   });
@@ -1367,6 +1369,8 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.power = $('power').value;
       }
+      // Recalculate nesting when power changes
+      autoCalculateLayout();
     } 
     debouncedSaveConfig();
   });
@@ -1379,6 +1383,8 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.gas = $('gas').value;
       }
+      // Recalculate nesting when gas changes
+      autoCalculateLayout();
     } 
     debouncedSaveConfig();
   });
