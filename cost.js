@@ -19,7 +19,7 @@ export function calcCutParams(power, th, gas){
     return {can:false, reason:"Не указан тип газа"};
   }
   
-  const P = CUT[power]; 
+  const P = CUT[parseFloat(power)]; 
   if(!P) return {can:false, reason:"Нет данных по мощности"};
   
   // Validate thickness - must be positive and realistic
