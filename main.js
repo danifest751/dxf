@@ -95,12 +95,14 @@ function updateActiveFileUI() {
     const elements = {
       th: $('th'),
       power: $('power'),
-      gas: $('gas')
+      gas: $('gas'),
+      qty: $('qty')
     };
     
     if (elements.th) elements.th.value = activeFile.settings.thickness;
     if (elements.power) elements.power.value = activeFile.settings.power;
     if (elements.gas) elements.gas.value = activeFile.settings.gas;
+    if (elements.qty) elements.qty.value = activeFile.quantity || 1;
     
     // Update tabs (orig/annot/nest)
     document.querySelectorAll('.tab').forEach(t => {
@@ -294,8 +296,10 @@ function calculateMultiFileNesting() {
     const box = partBBox(file.parsed);
     if (box.w <= 0 || box.h <= 0) continue;
     
-    // Calculate nesting for this file
-    const plan = computeNesting(W, H, m, g, file.quantity, box.w, box.h, rots);
+    // Calculate nesting for this file with the correct quantity
+    // Make sure to use file.quantity or default to 1 if not set
+    const fileQuantity = file.quantity || 1;
+    const plan = computeNesting(W, H, m, g, fileQuantity, box.w, box.h, rots);
     
     // Calculate cost and time for this file
     if (file.parsed.totalLen && file.parsed.pierceCount) {
@@ -632,7 +636,27 @@ function initializeEventHandlers() {
   on($('sH'),'input',debouncedSaveConfig);
   on($('margin'),'input',debouncedSaveConfig);
   on($('spacing'),'input',debouncedSaveConfig);
-  on($('qty'),'input',debouncedSaveConfig);
+  
+  // Update active file's quantity when global quantity changes
+  on($('qty'),'input',() => {
+    const activeFile = getActiveFile();
+    if (activeFile) {
+      // Update active file quantity
+      const newQuantity = parseInt($('qty').value) || 1;
+      activeFile.quantity = Math.max(1, Math.min(999, newQuantity));
+      
+      // Also update the file tab's quantity input
+      const tabQuantityInput = document.querySelector(`.file-tab[data-file-id="${activeFile.id}"] .quantity-input`);
+      if (tabQuantityInput) {
+        tabQuantityInput.value = activeFile.quantity;
+      }
+      
+      // Update multi-file nesting calculations
+      updateMultiFileNestingInfo();
+    }
+    debouncedSaveConfig();
+  });
+  
   on($('rotations'),'change',debouncedSaveConfig);
   
   on($('calc'),'click',()=>{ if(!state.parsed) return; recomputeParams(); updateCards(); state.tab='annot'; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab==='annot')); safeDraw() });
@@ -679,7 +703,14 @@ function initializeEventHandlers() {
   // Nesting
   on($('nest'), 'click', ()=>{
     if(!state.parsed){ setStatus('Сначала загрузите DXF','err'); return; }
-    const W = +$('sW').value, H = +$('sH').value, m = +$('margin').value, g = +$('spacing').value, qty = +$('qty').value;
+    const W = +$('sW').value, H = +$('sH').value, m = +$('margin').value, g = +$('spacing').value;
+    
+    // Use the active file's quantity if available, otherwise use the global quantity
+    let qty = +$('qty').value;
+    const activeFile = getActiveFile();
+    if (activeFile && activeFile.quantity) {
+      qty = activeFile.quantity;
+    }
     const rotStr = $('rotations').value; const rots = rotStr.split(',').map(s=>parseInt(s.trim(),10)).filter(n=>!Number.isNaN(n));
     const box = partBBox(state.parsed);
     if (box.w<=0 || box.h<=0){ setStatus('Не удалось определить габарит детали','err'); return; }
