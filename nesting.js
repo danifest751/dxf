@@ -1,5 +1,10 @@
 export function partBBox(parsed){
   const b = bounds(parsed.entities);
+  // Check if bounds are valid (not infinite)
+  const hasBounds = b.minX < Infinity && b.minY < Infinity && b.maxX > -Infinity && b.maxY > -Infinity;
+  if (!hasBounds) {
+    return { w: 0, h: 0, minX: 0, minY: 0 };
+  }
   return { w: Math.max(0, b.maxX - b.minX), h: Math.max(0, b.maxY - b.minY), minX:b.minX, minY:b.minY };
 }
 function bounds(ents){

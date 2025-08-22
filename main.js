@@ -403,9 +403,6 @@ function autoCalculateLayout() {
     state.nesting = null;
   }
   
-  // Update multi-file nesting info
-  updateMultiFileNestingInfo();
-  
   // Update empty layout message
   updateEmptyLayoutMessage();
 }
@@ -927,9 +924,6 @@ function addFileToProject(file, content) {
     setActiveFile(fileObj.id);
   }
   
-  // Update multi-file nesting info
-  updateMultiFileNestingInfo();
-  
   // Auto-calculate layout for the new file
   autoCalculateLayout();
   
@@ -980,18 +974,15 @@ function removeFile(fileId) {
     setActiveFile(projectState.files[newActiveIndex].id);
   }
   
-  // Update multi-file nesting info
-  updateMultiFileNestingInfo();
+  // Update layout after file removal
+  autoCalculateLayout();
 }
 
 // Multi-file nesting functions
 function updateMultiFileNestingInfo() {
-  // The multi-file nesting is now handled by autoCalculateLayout()
-  // which automatically determines if it should use single-file or combined nesting
-  // and updates the unified nesting card accordingly
-  
-  // Trigger auto-calculation to update the unified card
-  autoCalculateLayout();
+  // This function is now deprecated - the unified nesting card is handled automatically
+  // by autoCalculateLayout() which is called when files are added/removed or settings change
+  // No action needed here to avoid infinite recursion
 }
 
 function calculateMultiFileNesting() {
@@ -999,8 +990,8 @@ function calculateMultiFileNesting() {
   // The unified nesting card is updated by either updateNestingCards() or updateCombinedNestingUI()
   // depending on whether it's single or multi-file layout
   
-  // For backward compatibility, we'll trigger the auto-calculation
-  autoCalculateLayout();
+  // This function is now deprecated to avoid circular calls
+  console.warn('calculateMultiFileNesting is deprecated - use autoCalculateLayout instead');
 }
 
 async function initializeApp() {
@@ -1496,6 +1487,16 @@ async function loadFile(file){
     
     console.log('DXF parsed, entities:', parsed?.entities?.length || 0);
     
+    // Display validation errors if any
+    if (parsed.validationErrors && parsed.validationErrors.length > 0) {
+      console.warn('Validation errors found:', parsed.validationErrors);
+      const errorCount = parsed.validationErrors.length;
+      const maxDisplay = 5; // Limit displayed errors to avoid UI clutter
+      const displayErrors = parsed.validationErrors.slice(0, maxDisplay);
+      const moreText = errorCount > maxDisplay ? ` (и еще ${errorCount - maxDisplay})` : '';
+      setStatus(`Предупреждения в ${file.name}: ${displayErrors.join('; ')}${moreText}`, 'warn');
+    }
+    
     if (!parsed || !parsed.entities || parsed.entities.length === 0) {
       throw new Error(`Не найдено объектов в ${file.name}`);
     }
@@ -1543,6 +1544,7 @@ async function loadFile(file){
             const {cx,cy,r,a1=0,a2=0}=e.raw;
             if ([cx,cy,r,a1,a2].every(Number.isFinite) && r > 0) {
               let A1=a1*Math.PI/180, A2=a2*Math.PI/180; let d=A2-A1; if(d<0) d+=2*Math.PI;
+              // Cap steps to prevent excessive computation and memory usage
               const steps = Math.max(24, Math.min(360, Math.ceil((r*d)/1.5)));
               for(let k=0;k<=steps;k++){
                 const a=A1 + d*(k/steps); const x=cx + r*Math.cos(a); const y=cy + r*Math.sin(a);

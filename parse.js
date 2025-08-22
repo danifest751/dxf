@@ -51,31 +51,76 @@ export function parseDXFMainThread(content){
   if(cur && cur!==polyOpen && supported.has(cur.type)) entsRaw.push(cur);
 
   const ents=[]; let total=0; const piercePts=[];
+  const validationErrors = [];
   const push=(obj)=>{ if(obj && obj.type && isFinite(obj.len) && obj.len>=0){ obj.id=ents.length; ents.push(obj); total+=obj.len } };
+  
+  // Valid entity type checker
+  function isValidEntityType(type) {
+    const validTypes = ['LINE', 'CIRCLE', 'ARC', 'POLY'];
+    return validTypes.includes(type);
+  }
+  
+  // Coordinate validation helper
+  function areValidCoordinates(...coords) {
+    return coords.every(coord => Number.isFinite(coord) && !Number.isNaN(coord));
+  }
 
   for(const e of entsRaw){
-    if(!e || !e.type) continue;
+    if(!e || !e.type) {
+      validationErrors.push('Entity missing type information');
+      continue;
+    }
+    
+    if (!isValidEntityType(e.type)) {
+      validationErrors.push(`Unsupported entity type: ${e.type}`);
+      continue;
+    }
+    
     if(e.type==='LINE'){
-      const {x1,y1,x2,y2}=e.data; if([x1,y1,x2,y2].every(Number.isFinite)){
-        push({type:'LINE', len:Math.hypot(x2-x1,y2-y1)/1000, start:[x1,y1], raw: { x1: x1, y1: y1, x2: x2, y2: y2 }});
+      const {x1,y1,x2,y2}=e.data;
+      if(!areValidCoordinates(x1,y1,x2,y2)){
+        validationErrors.push(`LINE entity has invalid coordinates: (${x1},${y1}) to (${x2},${y2})`);
+        continue;
       }
+      const length = Math.hypot(x2-x1,y2-y1);
+      if (length <= 0) {
+        validationErrors.push(`LINE entity has zero length`);
+        continue;
+      }
+      push({type:'LINE', len:length/1000, start:[x1,y1], raw: { x1: x1, y1: y1, x2: x2, y2: y2 }});
     }else if(e.type==='CIRCLE'){
-      const {cx=0,cy=0,r=0}=e.data; if(r>0){
-        push({type:'CIRCLE', len:2*Math.PI*r/1000, start:[cx,cy], raw: { cx: cx, cy: cy, r: r }});
+      const {cx=0,cy=0,r=0}=e.data;
+      if(!areValidCoordinates(cx,cy,r) || r<=0){
+        validationErrors.push(`CIRCLE entity has invalid parameters: center(${cx},${cy}) radius=${r}`);
+        continue;
       }
+      push({type:'CIRCLE', len:2*Math.PI*r/1000, start:[cx,cy], raw: { cx: cx, cy: cy, r: r }});
     }else if(e.type==='ARC'){
-      const {cx=0,cy=0,r=0,a1=0,a2=0}=e.data; if(r>0){
-        let A1=a1*Math.PI/180, A2=a2*Math.PI/180; let d=A2-A1; if(d<0) d+=2*Math.PI;
-        push({type:'ARC', len:r*d/1000, start:[cx+r*Math.cos(A1), cy+r*Math.sin(A1)], raw: { cx: cx, cy: cy, r: r, a1: a1, a2: a2 }});
+      const {cx=0,cy=0,r=0,a1=0,a2=0}=e.data;
+      if(!areValidCoordinates(cx,cy,r,a1,a2) || r<=0){
+        validationErrors.push(`ARC entity has invalid parameters: center(${cx},${cy}) radius=${r} angles(${a1},${a2})`);
+        continue;
       }
+      let A1=a1*Math.PI/180, A2=a2*Math.PI/180; let d=A2-A1; if(d<0) d+=2*Math.PI;
+      if (d <= 0) {
+        validationErrors.push(`ARC entity has invalid angle range: ${a1}° to ${a2}°`);
+        continue;
+      }
+      push({type:'ARC', len:r*d/1000, start:[cx+r*Math.cos(A1), cy+r*Math.sin(A1)], raw: { cx: cx, cy: cy, r: r, a1: a1, a2: a2 }});
     }else if(e.type==='LWPOLYLINE' || e.type==='POLYLINE'){
       const pts=e.verts.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
-      if(pts.length>=2){
-        let L=0; for(let i=1;i<pts.length;i++) L+=Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
-        const closed = !!(e.data.flags & 1) || (pts.length>2 && (pts[0].x===pts.at(-1).x && pts[0].y===pts.at(-1).y));
-        if(closed) L+=Math.hypot(pts[0].x-pts.at(-1).x, pts[0].y-pts.at(-1).y);
-        push({type:'POLY', len: L/1000, start:[pts[0].x,pts[0].y], raw: { pts: pts, closed: closed }});
+      if(pts.length<2){
+        validationErrors.push(`${e.type} entity has insufficient valid points: ${pts.length}`);
+        continue;
       }
+      let L=0; for(let i=1;i<pts.length;i++) L+=Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
+      const closed = !!(e.data.flags & 1) || (pts.length>2 && (pts[0].x===pts.at(-1).x && pts[0].y===pts.at(-1).y));
+      if(closed) L+=Math.hypot(pts[0].x-pts.at(-1).x, pts[0].y-pts.at(-1).y);
+      if (L <= 0) {
+        validationErrors.push(`${e.type} entity has zero total length`);
+        continue;
+      }
+      push({type:'POLY', len: L/1000, start:[pts[0].x,pts[0].y], raw: { pts: pts, closed: closed }});
     }
   }
 
@@ -228,7 +273,7 @@ export function parseDXFMainThread(content){
   }
   const cutOrder = loops.slice().sort((a,b)=> b.depth - a.depth || a.area - b.area).map(l=>l.id);
 
-  return {entities: ents, totalLen: total, pierceCount: pierce, piercePts: piercePts, loops: loops, cutOrder: cutOrder};
+  return {entities: ents, totalLen: total, pierceCount: pierce, piercePts: piercePts, loops: loops, cutOrder: cutOrder, validationErrors: validationErrors};
 }
 
 export function sanitizeParsed(res){

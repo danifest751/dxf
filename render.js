@@ -177,6 +177,7 @@ export function buildPaths(state){
         const {cx,cy,r,a1=0,a2=0}=e.raw;
         if ([cx,cy,r,a1,a2].every(Number.isFinite) && r > 0) {
           let A1=a1*Math.PI/180, A2=a2*Math.PI/180; let d=A2-A1; if(d<0) d+=2*Math.PI;
+          // Cap steps to prevent excessive computation and memory usage
           const steps = Math.max(24, Math.min(360, Math.ceil((r*d)/1.5)));
           for(let k=0;k<=steps;k++){
             const a=A1 + d*(k/steps); const x=cx + r*Math.cos(a); const y=cy + r*Math.sin(a);
