@@ -444,6 +444,11 @@ function updateCombinedNestingUI(layout, allParts) {
   $('nCost').textContent = avgCostPerSheet.toFixed(2) + ' ₽';
   $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
   $('nLayoutType').textContent = 'Комбинированная';
+  
+  // Set up details toggle after card is shown
+  setTimeout(() => {
+    setupDetailsToggle();
+  }, 10);
 }
 
 function autoCalculateLayout() {
@@ -570,6 +575,11 @@ function updateNestingCards(plan, file) {
   }
   
   $('nLayoutType').textContent = 'Одиночная (' + plan.rot + '°)';
+  
+  // Set up details toggle after card is shown
+  setTimeout(() => {
+    setupDetailsToggle();
+  }, 10);
 }
 
 function drawCombinedNesting(state, canvas) {
@@ -1247,6 +1257,68 @@ function safeDraw(){
   } catch(e) { 
     console.error('Error in safeDraw:', e); 
     setStatus('Ошибка при отрисовке: '+e.message,'err');
+  }
+}
+
+// Details section toggle functionality for nesting card
+function setupDetailsToggle() {
+  const detailsToggle = $('detailsToggle');
+  const detailsContent = $('detailsContent');
+  const detailsHeader = $('detailsHeader');
+  
+  if (detailsToggle && detailsContent && detailsHeader) {
+    // Remove existing event listeners to prevent duplicates
+    const newToggle = detailsToggle.cloneNode(true);
+    const newHeader = detailsHeader.cloneNode(true);
+    detailsToggle.parentNode.replaceChild(newToggle, detailsToggle);
+    detailsHeader.parentNode.replaceChild(newHeader, detailsHeader);
+    
+    // Load saved state
+    const savedDetailsState = localStorage.getItem('nestingDetailsSectionExpanded');
+    const initiallyExpanded = savedDetailsState ? JSON.parse(savedDetailsState) : false;
+    
+    // Apply initial state
+    if (initiallyExpanded) {
+      detailsContent.style.display = 'block';
+      detailsContent.classList.add('expanded');
+      newToggle.classList.add('expanded');
+      newToggle.textContent = '▼';
+      newToggle.title = 'Скрыть подробности';
+    }
+    
+    on(newToggle, 'click', (e) => {
+      e.stopPropagation();
+      const isExpanded = detailsContent.classList.contains('expanded');
+      
+      if (isExpanded) {
+        // Collapse
+        detailsContent.classList.remove('expanded');
+        newToggle.classList.remove('expanded');
+        newToggle.textContent = '▶';
+        newToggle.title = 'Показать подробности';
+        localStorage.setItem('nestingDetailsSectionExpanded', 'false');
+        setTimeout(() => {
+          detailsContent.style.display = 'none';
+        }, 300);
+      } else {
+        // Expand
+        detailsContent.style.display = 'block';
+        localStorage.setItem('nestingDetailsSectionExpanded', 'true');
+        setTimeout(() => {
+          detailsContent.classList.add('expanded');
+          newToggle.classList.add('expanded');
+          newToggle.textContent = '▼';
+          newToggle.title = 'Скрыть подробности';
+        }, 10);
+      }
+    });
+    
+    // Also allow clicking on the header to toggle
+    on(newHeader, 'click', (e) => {
+      if (e.target !== newToggle) {
+        newToggle.click();
+      }
+    });
   }
 }
 

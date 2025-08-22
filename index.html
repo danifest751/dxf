@@ -169,30 +169,33 @@
         <div class="cards" id="cards">
         </div>
         <div class="card" id="nestCard" hidden>
-          <h3>📈 Итог</h3>
+          <h3>📈 Итог раскладки</h3>
           
-          <!-- Total geometry summary -->
-          <div class="kv"><span>Общая длина реза</span><b id="nTotalCutLength">—</b></div>
-          <div class="kv"><span>Общее кол-во врезок</span><b id="nTotalPierces">—</b></div>
-          <div class="kv"><span>Общее кол-во объектов</span><b id="nTotalObjects">—</b></div>
+          <!-- Essential summary -->
+          <div class="essential-summary">
+            <div class="kv main-result"><span>Нужно листов</span><b id="nSheets">—</b></div>
+            <div class="kv main-result"><span>Общая стоимость</span><b id="nTotalCost">—</b></div>
+            <div class="kv main-result"><span>Общее время</span><b id="nTotalTime">—</b></div>
+            <div class="kv"><span>Эффективность</span><b id="nEff">—</b></div>
+          </div>
           
-          <!-- File and part summary -->
-          <div class="kv"><span>Всего файлов</span><b id="nTotalFiles">—</b></div>
-          <div class="kv"><span>Всего деталей</span><b id="nTotalParts">—</b></div>
-          
-          <!-- Layout efficiency -->
-          <div class="kv"><span>На листе (шт)</span><b id="nPlaced">—</b></div>
-          <div class="kv"><span>Нужно листов</span><b id="nSheets">—</b></div>
-          <div class="kv"><span>Эффективность</span><b id="nEff">—</b></div>
-          
-          <!-- Time and cost -->
-          <div class="kv"><span>Время на лист</span><b id="nTime">—</b></div>
-          <div class="kv"><span>Общее время</span><b id="nTotalTime">—</b></div>
-          <div class="kv"><span>Стоимость листа</span><b id="nCost">—</b></div>
-          <div class="kv"><span>Общая стоимость</span><b id="nTotalCost">—</b></div>
-          
-          <!-- Layout type indicator -->
-          <div class="kv"><span>Тип раскладки</span><b id="nLayoutType">—</b></div>
+          <!-- Collapsible detailed parameters -->
+          <div class="section-title collapsible-header" id="detailsHeader" style="margin-top: 16px; font-size: 14px;">
+            <span>📊 Подробности</span>
+            <button class="toggle-btn" id="detailsToggle" title="Показать/скрыть подробности">▶</button>
+          </div>
+          <div id="detailsContent" class="collapsible-content" style="display:none;">
+            <!-- Detailed parameters -->
+            <div class="kv"><span>Общая длина реза</span><b id="nTotalCutLength">—</b></div>
+            <div class="kv"><span>Общее кол-во врезок</span><b id="nTotalPierces">—</b></div>
+            <div class="kv"><span>Общее кол-во объектов</span><b id="nTotalObjects">—</b></div>
+            <div class="kv"><span>Всего файлов</span><b id="nTotalFiles">—</b></div>
+            <div class="kv"><span>Всего деталей</span><b id="nTotalParts">—</b></div>
+            <div class="kv"><span>На листе (шт)</span><b id="nPlaced">—</b></div>
+            <div class="kv"><span>Время на лист</span><b id="nTime">—</b></div>
+            <div class="kv"><span>Стоимость листа</span><b id="nCost">—</b></div>
+            <div class="kv"><span>Тип раскладки</span><b id="nLayoutType">—</b></div>
+          </div>
           
           <div class="note" id="nestingNote">Раскладка сеточная, повороты выбором 0/90/180/270 (180 и 0, 270 и 90 эквивалентны по габариту).</div>
         </div>

@@ -396,8 +396,9 @@ function hitTest(state, x, y, tolerance) {
  * Рисует сущности на canvas
  * @param {Object} state - Состояние приложения
  * @param {HTMLCanvasElement} canvas - Canvas элемент
+ * @param {boolean} showAnnotations - Показывать ли аннотации (метки врезок и номера объектов)
  */
-export function drawEntities(state, canvas) {
+export function drawEntities(state, canvas, showAnnotations = false) {
   if (!canvas || !canvas.getContext) {
     console.error('Canvas не поддерживается');
     return;
@@ -457,6 +458,11 @@ export function drawEntities(state, canvas) {
       }
     }
     
+    // Отображение аннотаций если включен режим аннотации
+    if (showAnnotations) {
+      drawAnnotations(state, canvas, ctx);
+    }
+    
   } catch (error) {
     console.error('Ошибка при рисовании сущностей:', error);
     // Fallback: показать сообщение об ошибке
@@ -464,6 +470,109 @@ export function drawEntities(state, canvas) {
     ctx.fillStyle = '#ff5c5c';
     ctx.font = '14px system-ui';
     ctx.fillText('Ошибка отрисовки', 18, 28);
+  }
+}
+
+/**
+ * Отображает аннотации на canvas (метки врезок и номера объектов)
+ * @param {Object} state - Состояние приложения
+ * @param {HTMLCanvasElement} canvas - Canvas элемент
+ * @param {CanvasRenderingContext2D} ctx - Контекст canvas
+ */
+function drawAnnotations(state, canvas, ctx) {
+  if (!state.parsed) return;
+  
+  try {
+    // Отображение меток врезок
+    if (state.parsed.piercePts && state.parsed.piercePts.length > 0) {
+      drawPierceAnnotations(state, canvas, ctx);
+    }
+    
+    // Отображение номеров объектов (только при малом количестве)
+    if (state.parsed.entities && state.parsed.entities.length <= 50) {
+      drawEntityNumbers(state, canvas, ctx);
+    }
+    
+  } catch (error) {
+    console.warn('Ошибка при отображении аннотаций:', error);
+  }
+}
+
+/**
+ * Отображает метки точек врезки
+ * @param {Object} state - Состояние приложения
+ * @param {HTMLCanvasElement} canvas - Canvas элемент
+ * @param {CanvasRenderingContext2D} ctx - Контекст canvas
+ */
+function drawPierceAnnotations(state, canvas, ctx) {
+  const piercePts = state.parsed.piercePts;
+  const maxLabels = 100; // Ограничение для производительности
+  const limit = Math.min(piercePts.length, maxLabels);
+  
+  // Настройки текста
+  const fontSize = Math.max(8, 12 / state.zoom);
+  ctx.font = `${fontSize}px system-ui`;
+  ctx.fillStyle = '#ff8080';
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2 / state.zoom;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  for (let i = 0; i < limit; i++) {
+    const pt = piercePts[i];
+    if (!pt || !Array.isArray(pt) || pt.length < 2) continue;
+    
+    try {
+      const label = `P${i + 1}`;
+      
+      // Обводка текста для лучшей читаемости
+      ctx.strokeText(label, pt[0], pt[1]);
+      ctx.fillText(label, pt[0], pt[1]);
+      
+    } catch (error) {
+      console.warn('Ошибка при отображении метки врезки:', error);
+    }
+  }
+  
+  if (piercePts.length > maxLabels) {
+    console.warn(`Ограничено количество меток врезок: ${maxLabels} из ${piercePts.length}`);
+  }
+}
+
+/**
+ * Отображает номера объектов
+ * @param {Object} state - Состояние приложения
+ * @param {HTMLCanvasElement} canvas - Canvas элемент
+ * @param {CanvasRenderingContext2D} ctx - Контекст canvas
+ */
+function drawEntityNumbers(state, canvas, ctx) {
+  const entities = state.parsed.entities;
+  
+  // Настройки текста
+  const fontSize = Math.max(6, 10 / state.zoom);
+  ctx.font = `${fontSize}px system-ui`;
+  ctx.fillStyle = '#9db4ff';
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 1 / state.zoom;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  for (let i = 0; i < entities.length; i++) {
+    const entity = entities[i];
+    if (!entity || !entity.start) continue;
+    
+    try {
+      const label = `${i + 1}`;
+      const x = entity.start[0];
+      const y = entity.start[1];
+      
+      // Обводка текста
+      ctx.strokeText(label, x, y);
+      ctx.fillText(label, x, y);
+      
+    } catch (error) {
+      console.warn('Ошибка при отображении номера объекта:', error);
+    }
   }
 }
 
