@@ -348,8 +348,12 @@ async function loadFile(f){
 
 // Cost/time
 function recomputeParams(){
-  const th=parseFloat($('th').value), power=$('power').value, gas=$('gas').value;
+  const th = parseFloat($('th').value);
+  const power = $('power').value;
+  const gas = $('gas').value;
   const cp = calcCutParams(power, th, gas);
+  
+  // Display the thickness-specific cutting speed
   $('cutSpd').value = cp.can ? cp.speed : 0;
   $('pierceSec').value = cp.can ? cp.pierce.toFixed(2) : 0;
 }
