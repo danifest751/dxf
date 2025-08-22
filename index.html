@@ -54,9 +54,9 @@
             <label>Мощность</label>
             <select id="power">
               <option value="0.5">0.5 кВт</option>
-              <option value="1">1.0 кВт</option>
+              <option value="1.0">1.0 кВт</option>
               <option value="1.5" selected>1.5 кВт</option>
-              <option value="2">2.0 кВт</option>
+              <option value="2.0">2.0 кВт</option>
             </select>
           </div>
           <div>
@@ -89,7 +89,7 @@
         </div>
         <div class="row">
           <div><label>Газ, ₽/мин</label><input id="gasPrice" type="number" value="15" step="0.1" readonly></div>
-          <div><label>Машино-час, ₽/ч</label><input id="machPrice" type="number" value="500" step="50" readonly></div>
+          <div><label>Машино-час, ₽/ч</label><input id="machPrice" type="number" value="1200" step="50" readonly></div>
         </div>
 
         <div class="section-title">Лист и количество</div>
@@ -102,17 +102,15 @@
           <div><label>Зазор, мм</label><input id="spacing" type="number" value="5"></div>
         </div>
         <div class="row">
-          <div>
-            <label>Повороты</label>
+          <div><label>Повороты</label>
             <select id="rotations">
               <option value="0,90" selected>0°/90°</option>
               <option value="0,90,180">0°/90°/180°</option>
               <option value="0,90,180,270">0°/90°/180°/270°</option>
             </select>
           </div>
-          <div>
-            <label>Количество деталей</label>
-            <input id="qty" type="number" value="1" min="1" max="999">
+          <div style="display:flex; align-items:flex-end; gap:8px">
+            <!-- Buttons moved to main area -->
           </div>
         </div>
 

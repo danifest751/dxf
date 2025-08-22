@@ -422,8 +422,8 @@ function updateCombinedNestingUI(layout, allParts) {
         const gasRubPerMin = parseFloat($('gasPrice').value);
         const machRubPerHr = parseFloat($('machPrice').value);
         
-        const cutRubPerPart = perM * file.parsed.totalLen;
-        const pierceRubPerPart = perPierce * file.parsed.pierceCount;
+        const cutRubPerPart = perM * file.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
+        const pierceRubPerPart = perPierce * file.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
         const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
         const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
         const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
@@ -551,8 +551,8 @@ function updateNestingCards(plan, file) {
       const gasRubPerMin = parseFloat($('gasPrice').value);
       const machRubPerHr = parseFloat($('machPrice').value);
       
-      const cutRubPerPart = perM * file.parsed.totalLen;
-      const pierceRubPerPart = perPierce * file.parsed.pierceCount;
+      const cutRubPerPart = perM * file.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
+      const pierceRubPerPart = perPierce * file.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
       const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
       const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
       const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
@@ -960,6 +960,9 @@ function createFileTab(file) {
   on(layoutCheckbox, 'change', (e) => {
     e.stopPropagation();
     file.includeInLayout = e.target.checked;
+    
+    // Auto-recalculate layout when inclusion changes
+    autoCalculateLayout();
   });
   
   // Quantity input event
@@ -968,6 +971,9 @@ function createFileTab(file) {
     const newQuantity = parseInt(e.target.value) || 1;
     file.quantity = Math.max(1, Math.min(999, newQuantity));
     e.target.value = file.quantity;
+    
+    // Auto-recalculate layout when quantity changes
+    autoCalculateLayout();
   });
   
   // Close button event
@@ -1421,6 +1427,8 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.thickness = parseFloat($('th').value);
       }
+      // Recalculate nesting when thickness changes
+      autoCalculateLayout();
     } 
     debouncedSaveConfig(); 
   });
@@ -1433,6 +1441,8 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.power = $('power').value;
       }
+      // Recalculate nesting when power changes
+      autoCalculateLayout();
     } 
     debouncedSaveConfig();
   });
@@ -1445,6 +1455,8 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.gas = $('gas').value;
       }
+      // Recalculate nesting when gas changes
+      autoCalculateLayout();
     } 
     debouncedSaveConfig();
   });
@@ -1491,20 +1503,20 @@ function initializeEventHandlers() {
   on($('dlReport'),'click',()=>downloadText('nesting_report.txt', makeNestingReport(state)));
 
   // Drag & drop / file handling for multiple files
-  // const drop=$('drop');
-  // on(drop,'dragover',e=>{e.preventDefault(); drop.style.borderColor='#6d8cff'});
-  // on(drop,'dragleave',()=>drop.style.borderColor='#44507a');
-  // on(drop,'drop',e=>{
-  //   e.preventDefault(); 
-  //   drop.style.borderColor='#44507a'; 
-  //   const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.dxf'));
-  //   if(files.length > 0) {
-  //     loadFiles(files);
-  //   } else {
-  //     setStatus('Пожалуйста, выберите DXF файлы', 'err');
-  //   }
-  // });
-  // on(drop,'click',()=>$('file').click());
+  const drop=$('drop');
+  on(drop,'dragover',e=>{e.preventDefault(); drop.style.borderColor='#6d8cff'});
+  on(drop,'dragleave',()=>drop.style.borderColor='#44507a');
+  on(drop,'drop',e=>{
+    e.preventDefault(); 
+    drop.style.borderColor='#44507a'; 
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.dxf'));
+    if(files.length > 0) {
+      loadFiles(files);
+    } else {
+      setStatus('Пожалуйста, выберите DXF файлы', 'err');
+    }
+  });
+  on(drop,'click',()=>$('file').click());
   on($('file'),'change',e=>{ 
     const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.dxf'));
     if(files.length > 0) {
@@ -1848,8 +1860,8 @@ function updateCards(){
     const pierceMin = can ? (state.parsed.pierceCount * pierce) / 60 : 0;
     const totalMin = cutMin + pierceMin;
 
-    const cutRub = perM * state.parsed.totalLen;
-    const pierceRub = perPierce * state.parsed.pierceCount;
+    const cutRub = perM * state.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
+    const pierceRub = perPierce * state.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
     const gasRub = gasRubPerMin * totalMin * (gasCons ? gasCons/4 : 1);
     const machRub = (machRubPerHr/60) * totalMin;
     const totalRub = cutRub + pierceRub + gasRub + machRub;

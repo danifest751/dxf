@@ -23,10 +23,10 @@ export function createAnnotatedDXF(orig, parsed){
     return num.toFixed(digits);
   };
   
-  let ann = `\n; === LASER CUTTING ANNOTATIONS ===\n`;
-  ann += `; Objects: ${parsed.entities.length}\n`;
-  ann += `; Total length: ${safeFixed(parsed.totalLen)} m\n`;
-  ann += `; Pierce points: ${parsed.pierceCount || 0}\n`;
+  let ann = `\n; === АННОТАЦИИ ЛАЗЕРНОЙ РЕЗКИ ===\n`;
+  ann += `; Объектов: ${parsed.entities.length}\n`;
+  ann += `; Общая длина: ${safeFixed(parsed.totalLen)} м\n`;
+  ann += `; Врезок: ${parsed.pierceCount || 0}\n`;
   
   // Limit annotations to prevent excessive output
   const entityCount = Math.min(parsed.entities.length, MAX_ANNOTATIONS);
@@ -38,13 +38,13 @@ export function createAnnotatedDXF(orig, parsed){
     const startY = safeFixed(e.start?.[1] || 0, 2);
     const length = safeFixed(e.len || 0);
     
-    const line = `; ${i+1}) ${e.type || 'UNKNOWN'} L=${length}m @ X=${startX} Y=${startY}`;
+    const line = `; ${i+1}) ${e.type || 'UNKNOWN'} L=${length}м @ X=${startX} Y=${startY}`;
     const wrappedLines = wrapLine(line);
     ann += wrappedLines.join('\n') + '\n';
   }
   
   if (parsed.entities.length > MAX_ANNOTATIONS) {
-    ann += `; ... and ${parsed.entities.length - MAX_ANNOTATIONS} more objects\n`;
+    ann += `; ... и ещё ${parsed.entities.length - MAX_ANNOTATIONS} объектов\n`;
   }
   
   // Pierce points annotations
@@ -62,13 +62,13 @@ export function createAnnotatedDXF(orig, parsed){
   }
   
   if (piercePts.length > MAX_ANNOTATIONS) {
-    ann += `; ... and ${piercePts.length - MAX_ANNOTATIONS} more pierce points\n`;
+    ann += `; ... и ещё ${piercePts.length - MAX_ANNOTATIONS} точек врезки\n`;
   }
   
   return orig + ann;
 }
-export function createDXFWithMarkers(orig, parsed, radius=2.0){
-  const mark = (x,y)=> `0\nCIRCLE\n8\nPIERCE_MARKERS\n62\n1\n10\n${x}\n20\n${y}\n40\n${radius}\n`;
+export function createDXFWithMarkers(orig, parsed, radius=0.5){
+  const mark = (x,y)=> `0\nCIRCLE\n8\nPIERCE\n10\n${x}\n20\n${y}\n40\n${radius}\n`;
   const lines = orig.split(/\r?\n/);
   const upper = lines.map(s=>s.toUpperCase());
   let entitiesStart=-1, entitiesEnd=-1;
@@ -83,7 +83,7 @@ export function createDXFWithMarkers(orig, parsed, radius=2.0){
     }
   }
   if(entitiesEnd<0) return orig;
-  const markerStr = (parsed.piercePts||[]).map(p=>mark(p[0].toFixed(3),p[1].toFixed(3))).join('');
+  const markerStr = (parsed.piercePts||[]).map(p=>mark(p[0].toFixed(4),p[1].toFixed(4))).join('');
   const newLines = lines.slice(0,entitiesEnd).join('\n') + '\n' + markerStr + lines.slice(entitiesEnd).join('\n');
   return newLines;
 }
