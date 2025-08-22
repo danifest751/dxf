@@ -5,11 +5,12 @@ import { initCanvasInteractions, buildPaths, drawEntities, fitView } from './ren
 import { partBBox, computeNesting, drawNesting, makeNestingReport } from './nesting.js';
 import { createAnnotatedDXF, createDXFWithMarkers, createSVG, createCSV, downloadText } from './annotate.js';
 import { makeRunTests } from './tests.js';
+import { loadConfig, applyConfigToForm, getConfig, loadConfigFromStorage } from './config-loader.js';
 
 const state={rawDXF:'', parsed:null, tab:'orig', pan:{x:0,y:0}, zoom:1, nesting:null, paths:[], piercePaths:[], index:null};
 let cv = null;
 
-function initializeApp() {
+async function initializeApp() {
   cv = $('cv');
   if (!cv) {
     console.error('Canvas element with ID "cv" not found!');
@@ -32,12 +33,83 @@ function initializeApp() {
   }
   
   try {
+    // Load configuration first
+    setStatus('Загрузка конфигурации...', 'warn');
+    
+    // Try to load from localStorage first, then from config.json
+    let config = loadConfigFromStorage();
+    if (!config) {
+      config = await loadConfig();
+    }
+    
+    // Apply configuration to form elements
+    applyConfigurationToElements();
+    
     initCanvasInteractions(state, cv, safeDraw);
     initializeEventHandlers();
     console.log('App initialized successfully');
+    setStatus('Готово к работе', 'ok');
   } catch (e) {
     console.error('Error initializing app:', e);
     setStatus('Ошибка инициализации: ' + e.message, 'err');
+  }
+}
+
+// Save current form values to configuration
+function saveCurrentConfig() {
+  try {
+    const formValues = {
+      power: $('power')?.value,
+      gas: $('gas')?.value,
+      thickness: $('th')?.value,
+      pricePerMeter: $('pPerM')?.value,
+      pricePerPierce: $('pPierce')?.value,
+      gasPricePerMinute: $('gasPrice')?.value,
+      machineHourPrice: $('machPrice')?.value,
+      sheetWidth: $('sW')?.value,
+      sheetHeight: $('sH')?.value,
+      margin: $('margin')?.value,
+      spacing: $('spacing')?.value,
+      quantity: $('qty')?.value,
+      rotations: $('rotations')?.value
+    };
+    
+    // Import and use saveConfigFromForm
+    import('./config-loader.js').then(({ saveConfigFromForm }) => {
+      saveConfigFromForm(formValues);
+    }).catch(error => {
+      console.warn('Failed to save configuration:', error);
+    });
+  } catch (error) {
+    console.warn('Failed to save configuration:', error);
+  }
+}
+
+// Apply configuration to form elements
+function applyConfigurationToElements() {
+  const elements = {
+    power: $('power'),
+    gas: $('gas'),
+    thickness: $('th'),
+    thicknessDisplay: $('tVal'),
+    pricePerMeter: $('pPerM'),
+    pricePerPierce: $('pPierce'),
+    gasPricePerMinute: $('gasPrice'),
+    machineHourPrice: $('machPrice'),
+    sheetWidth: $('sW'),
+    sheetHeight: $('sH'),
+    margin: $('margin'),
+    spacing: $('spacing'),
+    quantity: $('qty'),
+    rotations: $('rotations')
+  };
+  
+  applyConfigToForm(elements);
+  
+  // Update calculated fields after applying config
+  if (state.parsed) {
+    recomputeParams();
+    updateCards();
   }
 }
 
@@ -89,10 +161,25 @@ function initializeEventHandlers() {
   // Tabs
   document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>{ state.tab=t.dataset.tab; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t)); safeDraw() }));
 
-  // UI events
-  on($('th'),'input',()=>{ $('tVal').textContent=$('th').value; if(state.parsed) { recomputeParams(); updateCards(); } });
-  on($('power'),'change',()=>state.parsed&&(recomputeParams(),updateCards()));
-  on($('gas'),'change',()=>state.parsed&&(recomputeParams(),updateCards()));
+  // UI events with config saving
+  on($('th'),'input',()=>{ $('tVal').textContent=$('th').value; if(state.parsed) { recomputeParams(); updateCards(); } saveCurrentConfig(); });
+  on($('power'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} saveCurrentConfig();});
+  on($('gas'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} saveCurrentConfig();});
+  
+  // Save config when pricing changes
+  on($('pPerM'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  on($('pPierce'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  on($('gasPrice'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  on($('machPrice'),'input',()=>{if(state.parsed) updateCards(); saveCurrentConfig();});
+  
+  // Save config when sheet parameters change
+  on($('sW'),'input',saveCurrentConfig);
+  on($('sH'),'input',saveCurrentConfig);
+  on($('margin'),'input',saveCurrentConfig);
+  on($('spacing'),'input',saveCurrentConfig);
+  on($('qty'),'input',saveCurrentConfig);
+  on($('rotations'),'change',saveCurrentConfig);
+  
   on($('calc'),'click',()=>{ if(!state.parsed) return; recomputeParams(); updateCards(); state.tab='annot'; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab==='annot')); safeDraw() });
 
   // Exports
