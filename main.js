@@ -422,8 +422,8 @@ function updateCombinedNestingUI(layout, allParts) {
         const gasRubPerMin = parseFloat($('gasPrice').value);
         const machRubPerHr = parseFloat($('machPrice').value);
         
-        const cutRubPerPart = perM * file.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
-        const pierceRubPerPart = perPierce * file.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
+        const cutRubPerPart = perM * file.parsed.totalLen;
+        const pierceRubPerPart = perPierce * file.parsed.pierceCount;
         const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
         const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
         const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
@@ -950,9 +950,6 @@ function createFileTab(file) {
   on(layoutCheckbox, 'change', (e) => {
     e.stopPropagation();
     file.includeInLayout = e.target.checked;
-    
-    // Auto-recalculate layout when inclusion changes
-    autoCalculateLayout();
   });
   
   // Quantity input event
@@ -961,9 +958,6 @@ function createFileTab(file) {
     const newQuantity = parseInt(e.target.value) || 1;
     file.quantity = Math.max(1, Math.min(999, newQuantity));
     e.target.value = file.quantity;
-    
-    // Auto-recalculate layout when quantity changes
-    autoCalculateLayout();
   });
   
   // Close button event
@@ -1355,8 +1349,6 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.thickness = parseFloat($('th').value);
       }
-      // Recalculate nesting when thickness changes
-      autoCalculateLayout();
     } 
     debouncedSaveConfig(); 
   });
@@ -1369,8 +1361,6 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.power = $('power').value;
       }
-      // Recalculate nesting when power changes
-      autoCalculateLayout();
     } 
     debouncedSaveConfig();
   });
@@ -1383,8 +1373,6 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.gas = $('gas').value;
       }
-      // Recalculate nesting when gas changes
-      autoCalculateLayout();
     } 
     debouncedSaveConfig();
   });
@@ -1414,9 +1402,6 @@ function initializeEventHandlers() {
       if (tabQuantityInput) {
         tabQuantityInput.value = activeFile.quantity;
       }
-      
-      // Auto-recalculate layout when quantity changes
-      autoCalculateLayout();
     }
     debouncedSaveConfig();
   });
@@ -1433,7 +1418,7 @@ function initializeEventHandlers() {
   on($('dlCSV'),'click',()=>downloadText('entities.csv',createCSV(state.parsed)));
   on($('dlReport'),'click',()=>downloadText('nesting_report.txt', makeNestingReport(state)));
 
-  // Drag & drop / file handling for multiple files - removed drop functionality
+  // Drag & drop / file handling for multiple files
   // const drop=$('drop');
   // on(drop,'dragover',e=>{e.preventDefault(); drop.style.borderColor='#6d8cff'});
   // on(drop,'dragleave',()=>drop.style.borderColor='#44507a');
@@ -1791,8 +1776,8 @@ function updateCards(){
     const pierceMin = can ? (state.parsed.pierceCount * pierce) / 60 : 0;
     const totalMin = cutMin + pierceMin;
 
-    const cutRub = perM * state.parsed.totalLen * (1 + (th - 1) * 0.2); // Thickness multiplier: +20% per mm above 1mm
-    const pierceRub = perPierce * state.parsed.pierceCount * (1 + (th - 1) * 0.15); // Pierce cost increases with thickness
+    const cutRub = perM * state.parsed.totalLen;
+    const pierceRub = perPierce * state.parsed.pierceCount;
     const gasRub = gasRubPerMin * totalMin * (gasCons ? gasCons/4 : 1);
     const machRub = (machRubPerHr/60) * totalMin;
     const totalRub = cutRub + pierceRub + gasRub + machRub;

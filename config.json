@@ -83,7 +83,7 @@
     "_pricePerPierce_info": "Цена за одну врезку в рублях (₽/шт)",
     "gasPricePerMinute": 15.0,
     "_gasPricePerMinute_info": "Стоимость газа в рублях за минуту (₽/мин)",
-    "machineHourPrice": 1200.0,
+    "machineHourPrice": 500.0,
     "_machineHourPrice_info": "Стоимость машино-часа в рублях (₽/час)"
   },
   
