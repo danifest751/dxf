@@ -407,7 +407,7 @@ function hitTest(state, x,y, tol){
     if(e.type==='LINE'){ const {x1,y1,x2,y2}=e.raw; d = distPointSeg(x,y,x1,y1,x2,y2).d; }
     else if(e.type==='CIRCLE'){ const {cx,cy,r}=e.raw; d = Math.abs(Math.hypot(x-cx,y-cy)-r); }
     else if(e.type==='ARC'){ const {cx,cy,r}=e.raw; d = Math.abs(Math.hypot(x-cx,y-cy)-r); }
-    else if(e.type==='POLY'){ const pts=e.raw.pts||[]; for(let i=1;i<pts.length;i++){ const r = distPointSeg(x,y,pts[i-1].x,pts[i-1].y,pts[i].x,pts[i].y).d; if(r<d) d=r; } if(e.raw.closed && pts.length>2){ const r = distPointSeg(x,y,pts.at(-1).x,pts.at(-1).y,pts[0].x,pts[0].y).d; if(r<d) d=r; } }
+    else if(e.type==='POLY'){ const pts=e.raw.pts||[]; for(let i=1;i<pts.length;i++){ const r = distPointSeg(x,y,pts[i-1].x,pts[i-1].y,pts[i].x,pts[i].y).d; if(r<d) d=r; } if(e.raw.closed && pts.length>2){ const lastPt = pts[pts.length-1]; const r = distPointSeg(x,y,lastPt.x,lastPt.y,pts[0].x,pts[0].y).d; if(r<d) d=r; } }
     if(d<bestD){bestD=d; best={id, d};}
   }
   return (bestD<=tol)?best:null;

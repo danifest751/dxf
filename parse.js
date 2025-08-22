@@ -114,13 +114,15 @@ export function parseDXFMainThread(content){
         continue;
       }
       let L=0; for(let i=1;i<pts.length;i++) L+=Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
-      const closed = !!(e.data.flags & 1) || (pts.length>2 && (pts[0].x===pts.at(-1).x && pts[0].y===pts.at(-1).y));
-      if(closed) L+=Math.hypot(pts[0].x-pts.at(-1).x, pts[0].y-pts.at(-1).y);
+      const lastPt = pts[pts.length-1];
+      const firstPt = pts[0];
+      const closed = !!(e.data.flags & 1) || (pts.length>2 && (firstPt.x===lastPt.x && firstPt.y===lastPt.y));
+      if(closed) L+=Math.hypot(firstPt.x-lastPt.x, firstPt.y-lastPt.y);
       if (L <= 0) {
         validationErrors.push(`${e.type} entity has zero total length`);
         continue;
       }
-      push({type:'POLY', len: L/1000, start:[pts[0].x,pts[0].y], raw: { pts: pts, closed: closed }});
+      push({type:'POLY', len: L/1000, start:[firstPt.x,firstPt.y], raw: { pts: pts, closed: closed }});
     }
   }
 
