@@ -169,6 +169,44 @@
           <div class="kv"><span>Поворот</span><b id="nRot">—</b></div>
           <div class="note">Раскладка сеточная, повороты выбором 0/90/180/270 (180 и 0, 270 и 90 эквивалентны по габариту).</div>
         </div>
+        
+        <div class="card" id="multiFileCard" style="display: none;">
+          <h3>📄 Мультифайловая раскладка</h3>
+          
+          <div class="kv">
+            <span>Всего файлов</span>
+            <b id="multiFileTotalFiles">—</b>
+          </div>
+          
+          <div class="kv">
+            <span>Всего деталей</span>
+            <b id="multiFileTotalParts">—</b>
+          </div>
+          
+          <div class="kv">
+            <span>Листов потребуется</span>
+            <b id="multiFileSheets">—</b>
+          </div>
+          
+          <div class="kv">
+            <span>Общее время</span>
+            <b id="multiFileTime">—</b>
+          </div>
+          
+          <div class="kv">
+            <span>Общая стоимость</span>
+            <b id="multiFileCost">—</b>
+          </div>
+          
+          <div style="display: flex; gap: 8px; margin-top: 12px;">
+            <button id="calculateMultiFile" class="btn">🔄 Пересчитать всё</button>
+            <button id="globalNesting" class="btn">📦 Глобальная раскладка</button>
+          </div>
+          
+          <div class="note" style="margin-top: 12px;">
+            Расчет ведется для каждого файла отдельно. Глобальная раскладка оптимизирует размещение всех деталей на общих листах.
+          </div>
+        </div>
       </div>
     </div>
   </div>

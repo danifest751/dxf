@@ -31,6 +31,7 @@ function createFileObject(file, content) {
     piercePaths: [],
     index: null,
     visible: true,
+    quantity: 1,
     settings: {
       thickness: parseFloat($('th')?.value || '3'),
       power: $('power')?.value || '1.5',
@@ -122,19 +123,50 @@ function createFileTab(file) {
   fileName.textContent = file.name;
   fileName.title = file.name;
   
+  // Add quantity input
+  const quantityContainer = document.createElement('div');
+  quantityContainer.className = 'file-tab-quantity';
+  
+  const quantityLabel = document.createElement('span');
+  quantityLabel.textContent = 'шт:';
+  quantityLabel.className = 'quantity-label';
+  
+  const quantityInput = document.createElement('input');
+  quantityInput.type = 'number';
+  quantityInput.value = file.quantity || 1;
+  quantityInput.min = '1';
+  quantityInput.max = '999';
+  quantityInput.className = 'quantity-input';
+  quantityInput.title = 'Количество деталей';
+  
+  quantityContainer.appendChild(quantityLabel);
+  quantityContainer.appendChild(quantityInput);
+  
   const closeBtn = document.createElement('button');
   closeBtn.className = 'file-tab-close';
   closeBtn.innerHTML = '✕';
   closeBtn.title = 'Закрыть файл';
   
   tab.appendChild(fileName);
+  tab.appendChild(quantityContainer);
   tab.appendChild(closeBtn);
   
   // Tab click event
   on(tab, 'click', (e) => {
-    if (e.target !== closeBtn) {
+    if (e.target !== closeBtn && e.target !== quantityInput) {
       setActiveFile(file.id);
     }
+  });
+  
+  // Quantity input event
+  on(quantityInput, 'input', (e) => {
+    e.stopPropagation();
+    const newQuantity = parseInt(e.target.value) || 1;
+    file.quantity = Math.max(1, Math.min(999, newQuantity));
+    e.target.value = file.quantity;
+    
+    // Update global nesting calculations if needed
+    updateMultiFileNestingInfo();
   });
   
   // Close button event
@@ -167,6 +199,9 @@ function addFileToProject(file, content) {
   if (projectState.files.length === 1) {
     setActiveFile(fileObj.id);
   }
+  
+  // Update multi-file nesting info
+  updateMultiFileNestingInfo();
   
   return fileObj;
 }
@@ -214,6 +249,115 @@ function removeFile(fileId) {
     const newActiveIndex = Math.min(fileIndex, projectState.files.length - 1);
     setActiveFile(projectState.files[newActiveIndex].id);
   }
+  
+  // Update multi-file nesting info
+  updateMultiFileNestingInfo();
+}
+
+// Multi-file nesting functions
+function updateMultiFileNestingInfo() {
+  const multiFileCard = $('multiFileCard');
+  if (!multiFileCard || projectState.files.length <= 1) {
+    if (multiFileCard) multiFileCard.style.display = 'none';
+    return;
+  }
+  
+  multiFileCard.style.display = 'block';
+  
+  const totalParts = projectState.files.reduce((sum, file) => sum + (file.quantity || 1), 0);
+  const totalFiles = projectState.files.length;
+  
+  $('multiFileTotalParts').textContent = totalParts;
+  $('multiFileTotalFiles').textContent = totalFiles;
+  
+  // Calculate estimated sheets needed for all files
+  calculateMultiFileNesting();
+}
+
+function calculateMultiFileNesting() {
+  const W = +$('sW').value;
+  const H = +$('sH').value; 
+  const m = +$('margin').value;
+  const g = +$('spacing').value;
+  const rotStr = $('rotations').value;
+  const rots = rotStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !Number.isNaN(n));
+  
+  let totalSheetsNeeded = 0;
+  let totalCost = 0;
+  let totalTime = 0;
+  const fileResults = [];
+  
+  for (const file of projectState.files) {
+    if (!file.parsed) continue;
+    
+    // Get bounding box for this file
+    const box = partBBox(file.parsed);
+    if (box.w <= 0 || box.h <= 0) continue;
+    
+    // Calculate nesting for this file
+    const plan = computeNesting(W, H, m, g, file.quantity, box.w, box.h, rots);
+    
+    // Calculate cost and time for this file
+    if (file.parsed.totalLen && file.parsed.pierceCount) {
+      const th = file.settings.thickness;
+      const power = file.settings.power;
+      const gas = file.settings.gas;
+      const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
+      
+      if (can) {
+        const cutMinPerPart = (file.parsed.totalLen * 1000) / speed;
+        const pierceMinPerPart = (file.parsed.pierceCount * pierce) / 60;
+        const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
+        const timePerSheet = totalMinPerPart * plan.placed;
+        
+        const perM = parseFloat($('pPerM').value);
+        const perPierce = parseFloat($('pPierce').value);
+        const gasRubPerMin = parseFloat($('gasPrice').value);
+        const machRubPerHr = parseFloat($('machPrice').value);
+        
+        const cutRubPerPart = perM * file.parsed.totalLen;
+        const pierceRubPerPart = perPierce * file.parsed.pierceCount;
+        const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
+        const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
+        const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
+        const costPerSheet = totalRubPerPart * plan.placed;
+        
+        totalSheetsNeeded += plan.sheets;
+        totalCost += costPerSheet * plan.sheets;
+        totalTime += timePerSheet * plan.sheets;
+        
+        fileResults.push({
+          file,
+          plan,
+          timePerSheet,
+          costPerSheet
+        });
+      }
+    }
+  }
+  
+  // Update UI with results
+  $('multiFileSheets').textContent = totalSheetsNeeded;
+  $('multiFileCost').textContent = totalCost.toFixed(2) + ' ₽';
+  $('multiFileTime').textContent = totalTime.toFixed(2) + ' мин';
+  
+  // Store results for potential use
+  projectState.multiFileNesting = {
+    totalSheets: totalSheetsNeeded,
+    totalCost: totalCost,
+    totalTime: totalTime,
+    fileResults: fileResults
+  };
+}
+
+function performGlobalNesting() {
+  setStatus('Глобальная раскладка в разработке', 'warn');
+  
+  // Future implementation would:
+  // 1. Collect all parts from all files with their quantities
+  // 2. Run nesting algorithm on combined set
+  // 3. Show optimized layout across multiple sheets
+  // 4. Display results with assignment of parts to sheets
 }
 
 async function initializeApp() {
@@ -600,6 +744,20 @@ function initializeEventHandlers() {
   // Tests
   const runTests = makeRunTests({ parseDXF: parseDXFMainThread, sanitizeParsed, computeNesting });
   on($('runTests'),'click', runTests);
+  
+  // Multi-file nesting events
+  const calculateMultiFileBtn = $('calculateMultiFile');
+  if (calculateMultiFileBtn) {
+    on(calculateMultiFileBtn, 'click', () => {
+      updateMultiFileNestingInfo();
+      setStatus('Мультифайловая раскладка пересчитана', 'ok');
+    });
+  }
+  
+  const globalNestingBtn = $('globalNesting');
+  if (globalNestingBtn) {
+    on(globalNestingBtn, 'click', performGlobalNesting);
+  }
 
   // Init
   setStatus('Готово к работе','ok');

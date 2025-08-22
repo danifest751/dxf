@@ -260,7 +260,7 @@ header p{
   cursor: pointer;
   transition: all 0.3s ease;
   font-size: 13px;
-  max-width: 200px;
+  min-width: 200px;
 }
 
 .file-tab:hover {
@@ -282,6 +282,37 @@ header p{
   margin-right: 8px;
 }
 
+.file-tab-quantity {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.quantity-label {
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.quantity-input {
+  width: 35px;
+  height: 20px;
+  border: 1px solid var(--ring);
+  border-radius: 4px;
+  background: var(--card);
+  color: inherit;
+  font-size: 11px;
+  text-align: center;
+  padding: 0 2px;
+}
+
+.quantity-input:focus {
+  outline: none;
+  border-color: var(--primary-solid);
+  background: var(--panel);
+}
+
 .file-tab-close {
   background: none;
   border: none;
@@ -292,6 +323,7 @@ header p{
   font-size: 12px;
   opacity: 0.7;
   transition: all 0.2s ease;
+  margin-left: 8px;
 }
 
 .file-tab-close:hover {
@@ -725,4 +757,86 @@ canvas{
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(59, 130, 246, 0.5);
+}
+
+/* Multi-file nesting card */
+#multiFileCard {
+  margin-top: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--card) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border: 1px solid var(--ring);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+#multiFileCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3), transparent);
+}
+
+#multiFileCard h3 {
+  margin: 0 0 16px 0;
+  color: #f1f5f9;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.multi-file-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.multi-file-stat {
+  text-align: center;
+  padding: 12px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  transition: all 0.3s ease;
+}
+
+.multi-file-stat:hover {
+  background: rgba(59, 130, 246, 0.1);
+  transform: translateY(-2px);
+}
+
+.multi-file-stat .value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary-solid);
+  margin-bottom: 4px;
+}
+
+.multi-file-stat .label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.multi-file-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.multi-file-actions .btn {
+  font-size: 13px;
+  padding: 10px 20px;
+  min-width: 140px;
 }
