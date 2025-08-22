@@ -8,6 +8,17 @@ export const CUT = {
 };
 
 export function calcCutParams(power, th, gas){
+  // Validate all input parameters
+  if (typeof power === 'undefined' || power === null || power === '') {
+    return {can:false, reason:"Не указана мощность лазера"};
+  }
+  if (typeof th === 'undefined' || th === null || isNaN(th)) {
+    return {can:false, reason:"Не указана толщина металла"};
+  }
+  if (typeof gas === 'undefined' || gas === null || gas === '') {
+    return {can:false, reason:"Не указан тип газа"};
+  }
+  
   const P = CUT[power]; 
   if(!P) return {can:false, reason:"Нет данных по мощности"};
   
@@ -15,6 +26,7 @@ export function calcCutParams(power, th, gas){
   if (th <= 0) return {can:false, reason:"Недопустимая толщина металла"};
   
   const max = P.max[gas]; 
+  if(!max) return {can:false, reason:`Неподдерживаемый тип газа: ${gas}`};
   if(th > max) return {can:false, reason:`Недостаточная мощность для ${th} мм (${gas})`};
   
   // Default values from config.json in case configuration is not loaded yet

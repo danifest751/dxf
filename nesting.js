@@ -18,10 +18,18 @@ function bounds(ents){
   return {minX,minY,maxX,maxY};
 }
 export function computeGrid(W,H,m,g,pw,ph, qty){
+  // Validate all input parameters to prevent unexpected behavior
+  if (typeof W !== 'number' || !isFinite(W) || W <= 0) return {cols:0,rows:0,placed:0,positions:[]};
+  if (typeof H !== 'number' || !isFinite(H) || H <= 0) return {cols:0,rows:0,placed:0,positions:[]};
+  if (typeof m !== 'number' || !isFinite(m) || m < 0) m = 0;
+  if (typeof g !== 'number' || !isFinite(g) || g < 0) g = 0;
+  if (typeof pw !== 'number' || !isFinite(pw) || pw <= 0) return {cols:0,rows:0,placed:0,positions:[]};
+  if (typeof ph !== 'number' || !isFinite(ph) || ph <= 0) return {cols:0,rows:0,placed:0,positions:[]};
+  if (typeof qty !== 'number' || !isFinite(qty) || qty < 0) qty = 0;
+  
   const workW = W - 2*m, workH = H - 2*m;
-  // Validate quantity - must be positive
-  if (qty < 0) qty = 0;
-  if (workW<=0 || workH<=0 || pw<=0 || ph<=0) return {cols:0,rows:0,placed:0,positions:[]};
+  if (workW<=0 || workH<=0) return {cols:0,rows:0,placed:0,positions:[]};
+  
   const cols = Math.max(0, Math.floor((workW + g) / (pw + g)));
   const rows = Math.max(0, Math.floor((workH + g) / (ph + g)));
   const capacity = cols * rows;
