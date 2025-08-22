@@ -79,6 +79,7 @@ function setActiveFile(fileId) {
     // Update UI
     updateActiveFileUI();
     updateCards();
+    updateEmptyLayoutMessage();
     safeDraw();
   }
 }
@@ -124,7 +125,9 @@ function updateEmptyLayoutMessage() {
   if (!emptyMessage) return;
   
   // Show the message if we're in the nest tab and have no nesting data
-  const showMessage = state.tab === 'nest' && !state.nesting;
+  // Check both single file nesting and multi-file nesting
+  const hasNestingData = state.nesting || (projectState.multiFileNesting && projectState.multiFileNesting.totalSheets > 0);
+  const showMessage = state.tab === 'nest' && !hasNestingData;
   emptyMessage.classList.toggle('visible', showMessage);
 }
 
@@ -461,6 +464,9 @@ function calculateMultiFileNesting() {
     totalTime: totalTime,
     fileResults: fileResults
   };
+  
+  // Update empty layout message since we now have nesting data
+  updateEmptyLayoutMessage();
 }
 
 function performGlobalNesting() {

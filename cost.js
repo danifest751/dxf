@@ -25,8 +25,9 @@ export function calcCutParams(power, th, gas){
   
   // Apply power multiplier if both base speed and multiplier are available
   if (speed && powerMultiplier) {
-    speed = Math.round(speed * powerMultiplier);
-    console.log(`Speed calculation: ${baseCutSpeeds[thicknessKey]} × ${powerMultiplier} = ${speed} mm/min`);
+    const calculatedSpeed = speed * powerMultiplier;
+    speed = Math.round(calculatedSpeed);
+    console.log(`Speed calculation: ${baseCutSpeeds[thicknessKey]} × ${powerMultiplier} = ${calculatedSpeed} → ${speed} mm/min`);
   } else {
     // Fallback to old cutSpeeds configuration for backward compatibility
     const cutSpeeds = getConfigValue('cutting.cutSpeeds', {});
@@ -36,7 +37,7 @@ export function calcCutParams(power, th, gas){
       // Final fallback to calculated speed
       const baseSpeed = 2000;
       speed = Math.max(Math.round(baseSpeed * Math.pow(1 - (th/(max*1.5)), 0.6)), 100);
-      console.warn(`No configured speed for thickness ${th}mm and power ${power}kW, using calculated speed: ${speed}`);
+      console.log(`No configured speed for thickness ${th}mm and power ${power}kW, using calculated fallback: ${speed} mm/min`);
     } else {
       console.log(`Using legacy cutSpeeds configuration: ${speed} mm/min`);
     }
