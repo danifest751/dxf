@@ -144,6 +144,66 @@ header p{
   border-radius: 2px;
 }
 
+/* Collapsible section styles */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s ease;
+  padding-right: 8px;
+}
+
+.collapsible-header:hover {
+  color: #f1f5f9;
+}
+
+.toggle-btn {
+  background: var(--card);
+  border: 1px solid var(--ring);
+  color: var(--muted);
+  border-radius: 6px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
+}
+
+.toggle-btn:hover {
+  background: var(--panel-hover);
+  color: #f1f5f9;
+  transform: scale(1.1);
+}
+
+.toggle-btn.expanded {
+  transform: rotate(90deg);
+  background: var(--primary-solid);
+  color: white;
+}
+
+.toggle-btn.expanded:hover {
+  transform: rotate(90deg) scale(1.1);
+}
+
+.collapsible-content {
+  overflow: hidden;
+  transition: all 0.3s ease;
+  max-height: 0;
+  opacity: 0;
+}
+
+.collapsible-content.expanded {
+  max-height: 200px;
+  opacity: 1;
+  padding-top: 8px;
+}
+
 .file-drop{
   border: 2px dashed var(--ring);
   border-radius: 16px;

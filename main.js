@@ -180,6 +180,60 @@ function initializeEventHandlers() {
   // Tabs
   document.querySelectorAll('.tab').forEach(t=>on(t,'click',()=>{ state.tab=t.dataset.tab; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t)); safeDraw() }));
 
+  // Export section toggle functionality with state persistence
+  const exportToggle = $('exportToggle');
+  const exportContent = $('exportContent');
+  const exportHeader = $('exportHeader');
+  
+  // Load saved state
+  const savedExportState = localStorage.getItem('exportSectionExpanded');
+  const initiallyExpanded = savedExportState ? JSON.parse(savedExportState) : false;
+  
+  if (exportToggle && exportContent) {
+    // Apply initial state
+    if (initiallyExpanded) {
+      exportContent.style.display = 'block';
+      exportContent.classList.add('expanded');
+      exportToggle.classList.add('expanded');
+      exportToggle.textContent = '▼';
+      exportToggle.title = 'Скрыть экспорт';
+    }
+    
+    on(exportToggle, 'click', (e) => {
+      e.stopPropagation();
+      const isExpanded = exportContent.classList.contains('expanded');
+      
+      if (isExpanded) {
+        // Collapse
+        exportContent.classList.remove('expanded');
+        exportToggle.classList.remove('expanded');
+        exportToggle.textContent = '▶';
+        exportToggle.title = 'Показать экспорт';
+        localStorage.setItem('exportSectionExpanded', 'false');
+        setTimeout(() => {
+          exportContent.style.display = 'none';
+        }, 300);
+      } else {
+        // Expand
+        exportContent.style.display = 'block';
+        localStorage.setItem('exportSectionExpanded', 'true');
+        setTimeout(() => {
+          exportContent.classList.add('expanded');
+          exportToggle.classList.add('expanded');
+          exportToggle.textContent = '▼';
+          exportToggle.title = 'Скрыть экспорт';
+        }, 10);
+      }
+    });
+    
+    // Also allow clicking on the header to toggle
+    on(exportHeader, 'click', (e) => {
+      if (e.target !== exportToggle) {
+        exportToggle.click();
+      }
+    });
+  }
+
   // UI events with config saving (debounced for performance)
   on($('th'),'change',()=>{ if(state.parsed) { recomputeParams(); updateCards(); } debouncedSaveConfig(); });
   on($('power'),'change',()=>{if(state.parsed){recomputeParams();updateCards();} debouncedSaveConfig();});
@@ -360,7 +414,27 @@ async function loadFile(f){
     console.log('Paths built, count:', state.paths?.length || 0);
     
     ['calc','nest','dlOrig','dlAnn','dlDXFMarkers','dlSVG','dlCSV','dlReport'].forEach(id=>{ const el = $(id); if(el) el.disabled=false; });
-    if ($('dl')) $('dl').hidden=false;
+    const dlContainer = $('dl');
+    const exportContent = $('exportContent');
+    if (dlContainer) {
+      dlContainer.hidden = false;
+      // Check saved state before auto-expanding
+      const savedExportState = localStorage.getItem('exportSectionExpanded');
+      const shouldExpand = savedExportState ? JSON.parse(savedExportState) : true; // Default to expanded when file loads
+      
+      if (exportContent && shouldExpand) {
+        exportContent.style.display = 'block';
+        setTimeout(() => {
+          exportContent.classList.add('expanded');
+          const exportToggle = $('exportToggle');
+          if (exportToggle) {
+            exportToggle.classList.add('expanded');
+            exportToggle.textContent = '▼';
+            exportToggle.title = 'Скрыть экспорт';
+          }
+        }, 10);
+      }
+    }
     
     console.log('Updating cards...');
     measurePerformance('cards_update', () => {

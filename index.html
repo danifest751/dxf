@@ -108,14 +108,19 @@
           </div>
         </div>
 
-        <div class="section-title">Экспорт</div>
-        <div id="dl" style="display:flex;gap:8px;flex-wrap:wrap" hidden>
-          <button id="dlOrig" class="btn" disabled>⬇️ DXF (ориг.)</button>
-          <button id="dlAnn" class="btn" disabled>⬇️ DXF (комментарии)</button>
-          <button id="dlDXFMarkers" class="btn" disabled>⬇️ DXF (маркерный слой)</button>
-          <button id="dlSVG" class="btn" disabled>⬇️ SVG</button>
-          <button id="dlCSV" class="btn" disabled>⬇️ CSV</button>
-          <button id="dlReport" class="btn" disabled>⬇️ Отчёт</button>
+        <div class="section-title collapsible-header" id="exportHeader">
+          <span>📤 Экспорт</span>
+          <button class="toggle-btn" id="exportToggle" title="Показать/скрыть экспорт">▶</button>
+        </div>
+        <div id="exportContent" class="collapsible-content" style="display:none;">
+          <div id="dl" style="display:flex;gap:8px;flex-wrap:wrap" hidden>
+            <button id="dlOrig" class="btn" disabled>⬇️ DXF (ориг.)</button>
+            <button id="dlAnn" class="btn" disabled>⬇️ DXF (комментарии)</button>
+            <button id="dlDXFMarkers" class="btn" disabled>⬇️ DXF (маркерный слой)</button>
+            <button id="dlSVG" class="btn" disabled>⬇️ SVG</button>
+            <button id="dlCSV" class="btn" disabled>⬇️ CSV</button>
+            <button id="dlReport" class="btn" disabled>⬇️ Отчёт</button>
+          </div>
         </div>
 
         <div class="tests card" id="testsCard" hidden>
