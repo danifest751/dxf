@@ -310,6 +310,13 @@ function updateCombinedNestingUI(layout, allParts) {
   if (!nestCard) return;
   
   nestCard.hidden = false;
+  
+  // Count unique files
+  const uniqueFiles = new Set(allParts.map(part => part.file.id));
+  
+  // Update unified card elements
+  $('nTotalFiles').textContent = uniqueFiles.size;
+  $('nTotalParts').textContent = allParts.length;
   $('nPlaced').textContent = allParts.length;
   $('nSheets').textContent = layout.totalSheets;
   $('nEff').textContent = layout.efficiency.toFixed(1) + '%';
@@ -364,9 +371,15 @@ function updateCombinedNestingUI(layout, allParts) {
     }
   }
   
-  $('nTime').textContent = totalTime.toFixed(2) + ' мин (всего)';
-  $('nCost').textContent = totalCost.toFixed(2) + ' ₽ (всего)';
-  $('nRot').textContent = 'Комбинированная';
+  // Calculate average time per sheet
+  const avgTimePerSheet = layout.totalSheets > 0 ? totalTime / layout.totalSheets : 0;
+  const avgCostPerSheet = layout.totalSheets > 0 ? totalCost / layout.totalSheets : 0;
+  
+  $('nTime').textContent = avgTimePerSheet.toFixed(2) + ' мин';
+  $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
+  $('nCost').textContent = avgCostPerSheet.toFixed(2) + ' ₽';
+  $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
+  $('nLayoutType').textContent = 'Комбинированная';
 }
 
 function autoCalculateLayout() {
@@ -428,13 +441,18 @@ function updateNestingCards(plan, file) {
   if (!nestCard) return;
   
   nestCard.hidden = false;
+  
+  // Single file layout - update unified card elements
+  $('nTotalFiles').textContent = '1';
+  $('nTotalParts').textContent = file.quantity || 1;
   $('nPlaced').textContent = plan.placed;
   $('nSheets').textContent = plan.sheets;
+  
   const usedArea = plan.placed * (plan.pw * plan.ph);
   const eff = usedArea / (plan.W * plan.H) * 100;
   $('nEff').textContent = eff.toFixed(1) + '%';
   
-  // Calculate time and cost per sheet
+  // Calculate time and cost per sheet and totals
   if (file.parsed && file.parsed.totalLen && file.parsed.pierceCount) {
     const th = file.settings.thickness;
     const power = file.settings.power;
@@ -446,7 +464,10 @@ function updateNestingCards(plan, file) {
       const pierceMinPerPart = (file.parsed.pierceCount * pierce) / 60;
       const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
       const timePerSheet = totalMinPerPart * plan.placed;
+      const totalTime = timePerSheet * plan.sheets;
+      
       $('nTime').textContent = timePerSheet.toFixed(2) + ' мин';
+      $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
       
       const perM = parseFloat($('pPerM').value);
       const perPierce = parseFloat($('pPierce').value);
@@ -459,17 +480,24 @@ function updateNestingCards(plan, file) {
       const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
       const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
       const costPerSheet = totalRubPerPart * plan.placed;
+      const totalCost = costPerSheet * plan.sheets;
+      
       $('nCost').textContent = costPerSheet.toFixed(2) + ' ₽';
+      $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
     } else {
       $('nTime').textContent = 'Невозможно рассчитать';
+      $('nTotalTime').textContent = 'Невозможно рассчитать';
       $('nCost').textContent = 'Невозможно рассчитать';
+      $('nTotalCost').textContent = 'Невозможно рассчитать';
     }
   } else {
     $('nTime').textContent = 'Нет данных';
+    $('nTotalTime').textContent = 'Нет данных';
     $('nCost').textContent = 'Нет данных';
+    $('nTotalCost').textContent = 'Нет данных';
   }
   
-  $('nRot').textContent = plan.rot + '°';
+  $('nLayoutType').textContent = 'Одиночная (' + plan.rot + '°)';
 }
 
 function drawCombinedNesting(state, canvas) {
@@ -751,11 +779,7 @@ function updateActiveFileUI() {
     calculationCache.lastResult = null;
   }
   
-  // Update multi-file nesting button state
-  const multiFileNestBtn = $('multiFileNestBtn');
-  if (multiFileNestBtn) {
-    multiFileNestBtn.disabled = projectState.files.length === 0;
-  }
+  // Update multi-file nesting button state - removed since we use unified layout
   
   // Update calculate button state
   const calcBtn = $('calc');
@@ -896,11 +920,7 @@ function addFileToProject(file, content) {
     tabsContainer.style.display = 'block';
   }
   
-  // Enable multi-file nesting button
-  const multiFileNestBtn = $('multiFileNestBtn');
-  if (multiFileNestBtn) {
-    multiFileNestBtn.disabled = false;
-  }
+  // Enable buttons - removed multiFileNestBtn since we use unified layout
   
   // Set as active if it's the first file
   if (projectState.files.length === 1) {
@@ -966,121 +986,21 @@ function removeFile(fileId) {
 
 // Multi-file nesting functions
 function updateMultiFileNestingInfo() {
-  const multiFileCard = $('multiFileCard');
-  if (!multiFileCard) return;
+  // The multi-file nesting is now handled by autoCalculateLayout()
+  // which automatically determines if it should use single-file or combined nesting
+  // and updates the unified nesting card accordingly
   
-  // Calculate estimated sheets needed for all files
-  calculateMultiFileNesting();
-  
-  // Show the card if we have at least one included file
-  const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
-  multiFileCard.style.display = includedFiles.length > 0 ? 'block' : 'none';
+  // Trigger auto-calculation to update the unified card
+  autoCalculateLayout();
 }
 
 function calculateMultiFileNesting() {
-  const W = +$('sW').value;
-  const H = +$('sH').value; 
-  const m = +$('margin').value;
-  const g = +$('spacing').value;
-  const rotStr = $('rotations').value;
-  const rots = rotStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !Number.isNaN(n));
+  // This function is now integrated into autoCalculateLayout()
+  // The unified nesting card is updated by either updateNestingCards() or updateCombinedNestingUI()
+  // depending on whether it's single or multi-file layout
   
-  let totalSheetsNeeded = 0;
-  let totalCost = 0;
-  let totalTime = 0;
-  const fileResults = [];
-  
-  // Filter files that should be included in layout
-  const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
-  
-  // Count total included files and parts
-  const totalIncludedFiles = includedFiles.length;
-  const totalIncludedParts = includedFiles.reduce((sum, file) => sum + (file.quantity || 1), 0);
-  
-  // Update UI with totals
-  const totalFilesEl = $('multiFileTotalFiles');
-  const totalPartsEl = $('multiFileTotalParts');
-  const sheetsEl = $('multiFileSheets');
-  const costEl = $('multiFileCost');
-  const timeEl = $('multiFileTime');
-  
-  if (totalFilesEl) totalFilesEl.textContent = totalIncludedFiles;
-  if (totalPartsEl) totalPartsEl.textContent = totalIncludedParts;
-  
-  // If no files are included, reset the display and return
-  if (totalIncludedFiles === 0) {
-    if (sheetsEl) sheetsEl.textContent = '0';
-    if (costEl) costEl.textContent = '0 ₽';
-    if (timeEl) timeEl.textContent = '0 мин';
-    return;
-  }
-  
-  for (const file of includedFiles) {
-    if (!file.parsed) continue;
-    
-    // Get bounding box for this file
-    const box = partBBox(file.parsed);
-    if (box.w <= 0 || box.h <= 0) continue;
-    
-    // Calculate nesting for this file with the correct quantity
-    // Make sure to use file.quantity or default to 1 if not set
-    const fileQuantity = file.quantity || 1;
-    const plan = computeNesting(W, H, m, g, fileQuantity, box.w, box.h, rots);
-    
-    // Calculate cost and time for this file
-    if (file.parsed.totalLen && file.parsed.pierceCount) {
-      const th = file.settings.thickness;
-      const power = file.settings.power;
-      const gas = file.settings.gas;
-      const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
-      
-      if (can) {
-        const cutMinPerPart = (file.parsed.totalLen * 1000) / speed;
-        const pierceMinPerPart = (file.parsed.pierceCount * pierce) / 60;
-        const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
-        const timePerSheet = totalMinPerPart * plan.placed;
-        
-        const perM = parseFloat($('pPerM').value);
-        const perPierce = parseFloat($('pPierce').value);
-        const gasRubPerMin = parseFloat($('gasPrice').value);
-        const machRubPerHr = parseFloat($('machPrice').value);
-        
-        const cutRubPerPart = perM * file.parsed.totalLen;
-        const pierceRubPerPart = perPierce * file.parsed.pierceCount;
-        const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
-        const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
-        const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
-        const costPerSheet = totalRubPerPart * plan.placed;
-        
-        totalSheetsNeeded += plan.sheets;
-        totalCost += costPerSheet * plan.sheets;
-        totalTime += timePerSheet * plan.sheets;
-        
-        fileResults.push({
-          file,
-          plan,
-          timePerSheet,
-          costPerSheet
-        });
-      }
-    }
-  }
-  
-  // Update UI with results
-  if (sheetsEl) sheetsEl.textContent = totalSheetsNeeded;
-  if (costEl) costEl.textContent = totalCost.toFixed(2) + ' ₽';
-  if (timeEl) timeEl.textContent = totalTime.toFixed(2) + ' мин';
-  
-  // Store results for potential use
-  projectState.multiFileNesting = {
-    totalSheets: totalSheetsNeeded,
-    totalCost: totalCost,
-    totalTime: totalTime,
-    fileResults: fileResults
-  };
-  
-  // Update empty layout message since we now have nesting data
-  updateEmptyLayoutMessage();
+  // For backward compatibility, we'll trigger the auto-calculation
+  autoCalculateLayout();
 }
 
 async function initializeApp() {
@@ -1122,13 +1042,11 @@ async function initializeApp() {
     initializeEventHandlers();
     
     // Initialize button states
-    const multiFileNestBtn = $('multiFileNestBtn');
     const calcBtn = $('calc');
     const nestBtn = $('nest');
     const prevFileBtn = $('prevFileBtn');
     const nextFileBtn = $('nextFileBtn');
     
-    if (multiFileNestBtn) multiFileNestBtn.disabled = true;
     if (calcBtn) calcBtn.disabled = true;
     if (nestBtn) nestBtn.disabled = true;
     if (prevFileBtn) prevFileBtn.disabled = true;
@@ -1515,14 +1433,7 @@ function initializeEventHandlers() {
   const runTests = makeRunTests({ parseDXF: parseDXFMainThread, sanitizeParsed, computeNesting });
   on($('runTests'),'click', runTests);
   
-  // Multi-file nesting events
-  const calculateMultiFileBtn = $('calculateMultiFile');
-  if (calculateMultiFileBtn) {
-    on(calculateMultiFileBtn, 'click', () => {
-      autoCalculateLayout();
-      setStatus('Мультифайловая раскладка пересчитана', 'ok');
-    });
-  }
+  // Multi-file nesting events - removed calculateMultiFileBtn since we use unified auto-layout
 
   // Init
   setStatus('Готово к работе','ok');
