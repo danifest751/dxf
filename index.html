@@ -167,12 +167,14 @@
 
       <div class="body">
         <div class="cards" id="cards">
-          <div class="card" id="cGeom"><h3>📏 Геометрия</h3><div class="kv"><span>Длина реза</span><b id="mLen">—</b></div><div class="kv"><span>Врезки</span><b id="mPierce">—</b></div><div class="kv"><span>Объектов</span><b id="mEnt">—</b></div></div>
-          <div class="card" id="cTime"><h3>⏱️ Время</h3><div class="kv"><span>Резка</span><b id="mCutMin">—</b></div><div class="kv"><span>Врезки</span><b id="mPierceMin">—</b></div><div class="kv"><span>Итого</span><b id="mTotalMin">—</b></div></div>
-          <div class="card" id="cCost"><h3>💰 Стоимость за деталь</h3><div class="kv"><span>Резка</span><b id="mCutRub">—</b></div><div class="kv"><span>Врезки</span><b id="mPierceRub">—</b></div><div class="kv"><span>Газ</span><b id="mGasRub">—</b></div><div class="kv"><span>Машино-время</span><b id="mMachRub">—</b></div><div class="kv"><span><b>ИТОГО</b></span><b id="mTotalRub">—</b></div></div>
         </div>
         <div class="card" id="nestCard" hidden>
-          <h3>📦 Раскладка</h3>
+          <h3>📈 Итог</h3>
+          
+          <!-- Total geometry summary -->
+          <div class="kv"><span>Общая длина реза</span><b id="nTotalCutLength">—</b></div>
+          <div class="kv"><span>Общее кол-во врезок</span><b id="nTotalPierces">—</b></div>
+          <div class="kv"><span>Общее кол-во объектов</span><b id="nTotalObjects">—</b></div>
           
           <!-- File and part summary -->
           <div class="kv"><span>Всего файлов</span><b id="nTotalFiles">—</b></div>
