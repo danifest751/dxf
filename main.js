@@ -534,6 +534,17 @@ function updateNestingCards(plan, file) {
     const th = file.settings.thickness;
     const power = file.settings.power;
     const gas = file.settings.gas;
+    
+    // Validate that we have all required settings
+    if (!th || !power || !gas) {
+      console.warn('Missing settings for file:', file.name, { th, power, gas });
+      $('nTime').textContent = 'Нет данных';
+      $('nTotalTime').textContent = 'Нет данных';
+      $('nCost').textContent = 'Нет данных';
+      $('nTotalCost').textContent = 'Нет данных';
+      return;
+    }
+    
     const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
     
     if (can) {
@@ -562,6 +573,8 @@ function updateNestingCards(plan, file) {
       $('nCost').textContent = costPerSheet.toFixed(2) + ' ₽';
       $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
     } else {
+      // Handle cases where calculation is not possible
+      console.warn('Cannot calculate costs for file:', file.name, 'Settings:', file.settings);
       $('nTime').textContent = 'Невозможно рассчитать';
       $('nTotalTime').textContent = 'Невозможно рассчитать';
       $('nCost').textContent = 'Невозможно рассчитать';
@@ -1790,6 +1803,9 @@ async function loadFiles(files) {
   // Final status with layout information
   const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
   setStatus(`Успешно загружено ${files.length} файлов, в раскладке: ${includedFiles.length}`, 'ok');
+  
+  // Ensure final layout calculation after all files are loaded
+  autoCalculateLayout();
 }
 
 // Cost/time
