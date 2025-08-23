@@ -778,7 +778,7 @@ function drawMiniDXFContent(ctx, parsed, width, height, strokeColor) {
   ctx.translate(0, -bounds.maxY - bounds.minY);
   
   // Draw entities
-  ctx.strokeStyle = strokeColor;
+  ctx.strokeStyle = '#4f8cff';
   ctx.lineWidth = Math.max(0.5, 1 / scale); // Ensure line width is visible at any scale
   
   for (const entity of parsed.entities) {

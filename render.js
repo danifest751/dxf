@@ -417,8 +417,8 @@ export function drawEntities(state, canvas, showAnnotations = false) {
     state.__world();
     
     // Рисование основных путей
-    ctx.strokeStyle = '#9db4ff';
-    ctx.lineWidth = 0.3 / state.zoom;
+    ctx.strokeStyle = '#4f8cff';
+    ctx.lineWidth = 0.5 / state.zoom;
     ctx.fillStyle = 'transparent';
     
     for (const path of state.paths) {
@@ -431,8 +431,8 @@ export function drawEntities(state, canvas, showAnnotations = false) {
     
     // Рисование путей врезки
     if (state.piercePaths && state.piercePaths.length > 0) {
-      ctx.strokeStyle = '#ff8080';
-      ctx.fillStyle = 'rgba(255, 128, 128, 0.3)';
+      ctx.strokeStyle = '#ff6060';
+      ctx.fillStyle = 'rgba(255, 96, 96, 0.4)';
       
       for (const path of state.piercePaths) {
         try {

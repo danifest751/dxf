@@ -23,10 +23,10 @@ export function createAnnotatedDXF(orig, parsed){
     return num.toFixed(digits);
   };
   
-  let ann = `\n; === LASER CUTTING ANNOTATIONS ===\n`;
-  ann += `; Objects: ${parsed.entities.length}\n`;
-  ann += `; Total length: ${safeFixed(parsed.totalLen)} m\n`;
-  ann += `; Pierce points: ${parsed.pierceCount || 0}\n`;
+  let ann = `\n; === АННОТАЦИИ ЛАЗЕРНОЙ РЕЗКИ ===\n`;
+  ann += `; Объектов: ${parsed.entities.length}\n`;
+  ann += `; Общая длина: ${safeFixed(parsed.totalLen)} м\n`;
+  ann += `; Врезок: ${parsed.pierceCount || 0}\n`;
   
   // Limit annotations to prevent excessive output
   const entityCount = Math.min(parsed.entities.length, MAX_ANNOTATIONS);
@@ -38,13 +38,13 @@ export function createAnnotatedDXF(orig, parsed){
     const startY = safeFixed(e.start?.[1] || 0, 2);
     const length = safeFixed(e.len || 0);
     
-    const line = `; ${i+1}) ${e.type || 'UNKNOWN'} L=${length}m @ X=${startX} Y=${startY}`;
+    const line = `; ${i+1}) ${e.type || 'UNKNOWN'} L=${length}м @ X=${startX} Y=${startY}`;
     const wrappedLines = wrapLine(line);
     ann += wrappedLines.join('\n') + '\n';
   }
   
   if (parsed.entities.length > MAX_ANNOTATIONS) {
-    ann += `; ... and ${parsed.entities.length - MAX_ANNOTATIONS} more objects\n`;
+    ann += `; ... и ещё ${parsed.entities.length - MAX_ANNOTATIONS} объектов\n`;
   }
   
   // Pierce points annotations
@@ -62,13 +62,13 @@ export function createAnnotatedDXF(orig, parsed){
   }
   
   if (piercePts.length > MAX_ANNOTATIONS) {
-    ann += `; ... and ${piercePts.length - MAX_ANNOTATIONS} more pierce points\n`;
+    ann += `; ... и ещё ${piercePts.length - MAX_ANNOTATIONS} точек врезки\n`;
   }
   
   return orig + ann;
 }
-export function createDXFWithMarkers(orig, parsed, radius=2.0){
-  const mark = (x,y)=> `0\nCIRCLE\n8\nPIERCE_MARKERS\n62\n1\n10\n${x}\n20\n${y}\n40\n${radius}\n`;
+export function createDXFWithMarkers(orig, parsed, radius=0.8){
+  const mark = (x,y)=> `0\nCIRCLE\n8\nPIERCE\n62\n1\n10\n${x}\n20\n${y}\n40\n${radius}\n`;
   const lines = orig.split(/\r?\n/);
   const upper = lines.map(s=>s.toUpperCase());
   let entitiesStart=-1, entitiesEnd=-1;
@@ -94,7 +94,7 @@ export function createSVG(parsed){
   const p=[];
   p.push(`<?xml version="1.0" encoding="UTF-8"?>`);
   p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${W} ${H}" width="${W}mm" height="${H}mm">`);
-  p.push(`<g fill="none" stroke="#9db4ff" stroke-width="0.3">`);
+  p.push(`<g fill="none" stroke="#4f8cff" stroke-width="0.5">`);
   for(const e of ents){
     if(e.type==='LINE'){ const {x1,y1,x2,y2}=e.raw; p.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`); }
     else if(e.type==='CIRCLE'){ const {cx,cy,r}=e.raw; p.push(`<circle cx="${cx}" cy="${cy}" r="${r}"/>`); }
@@ -105,7 +105,7 @@ export function createSVG(parsed){
   }
   p.push(`</g>`);
   const pts = parsed.piercePts||[];
-  if(pts.length){ p.push(`<g fill="none" stroke="#ff8080" stroke-width="0.3">`);
+  if(pts.length){ p.push(`<g fill="none" stroke="#ff6060" stroke-width="0.5">`);
     for(const pt of pts){ p.push(`<circle cx="${pt[0]}" cy="${pt[1]}" r="1.2"/>`); }
     p.push(`</g>`);
   }
