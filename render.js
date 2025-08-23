@@ -417,8 +417,8 @@ export function drawEntities(state, canvas, showAnnotations = false) {
     state.__world();
     
     // Рисование основных путей
-    ctx.strokeStyle = '#4f8cff';
-    ctx.lineWidth = 0.5 / state.zoom;
+    ctx.strokeStyle = '#0066ff';
+    ctx.lineWidth = 0.8 / state.zoom;
     ctx.fillStyle = 'transparent';
     
     for (const path of state.paths) {
@@ -429,10 +429,10 @@ export function drawEntities(state, canvas, showAnnotations = false) {
       }
     }
     
-    // Рисование путей врезки
-    if (state.piercePaths && state.piercePaths.length > 0) {
-      ctx.strokeStyle = '#ff6060';
-      ctx.fillStyle = 'rgba(255, 96, 96, 0.4)';
+    // Рисование путей врезки (только в режиме аннотации)
+    if (showAnnotations && state.piercePaths && state.piercePaths.length > 0) {
+      ctx.strokeStyle = '#ff4444';
+      ctx.fillStyle = 'rgba(255, 68, 68, 0.5)';
       
       for (const path of state.piercePaths) {
         try {
@@ -518,6 +518,9 @@ function drawPierceAnnotations(state, canvas, ctx) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
+  // Сохраняем текущую трансформацию
+  ctx.save();
+  
   for (let i = 0; i < limit; i++) {
     const pt = piercePts[i];
     if (!pt || !Array.isArray(pt) || pt.length < 2) continue;
@@ -525,14 +528,23 @@ function drawPierceAnnotations(state, canvas, ctx) {
     try {
       const label = `P${i + 1}`;
       
+      // Компенсируем отражение по Y для текста
+      ctx.save();
+      ctx.translate(pt[0], pt[1]);
+      ctx.scale(1, -1); // Отражаем по Y, чтобы компенсировать общую трансформацию
+      
       // Обводка текста для лучшей читаемости
-      ctx.strokeText(label, pt[0], pt[1]);
-      ctx.fillText(label, pt[0], pt[1]);
+      ctx.strokeText(label, 0, 0);
+      ctx.fillText(label, 0, 0);
+      
+      ctx.restore();
       
     } catch (error) {
       console.warn('Ошибка при отображении метки врезки:', error);
     }
   }
+  
+  ctx.restore();
   
   if (piercePts.length > maxLabels) {
     console.warn(`Ограничено количество меток врезок: ${maxLabels} из ${piercePts.length}`);
@@ -566,9 +578,16 @@ function drawEntityNumbers(state, canvas, ctx) {
       const x = entity.start[0];
       const y = entity.start[1];
       
+      // Компенсируем отражение по Y для текста
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(1, -1); // Отражаем по Y
+      
       // Обводка текста
-      ctx.strokeText(label, x, y);
-      ctx.fillText(label, x, y);
+      ctx.strokeText(label, 0, 0);
+      ctx.fillText(label, 0, 0);
+      
+      ctx.restore();
       
     } catch (error) {
       console.warn('Ошибка при отображении номера объекта:', error);
