@@ -398,9 +398,11 @@ function updateCombinedNestingUI(layout, allParts) {
   $('nSheets').textContent = layout.totalSheets;
   $('nEff').textContent = layout.efficiency.toFixed(1) + '%';
   
-  // Calculate combined time and cost
+  // Calculate combined time and cost with debug logging
   let totalTime = 0;
   let totalCost = 0;
+  
+  console.log('Starting combined cost calculation for', Object.keys(fileGroups).length, 'file groups');
   
   // Calculate time and cost for each file group
   for (const group of Object.values(fileGroups)) {
@@ -409,6 +411,9 @@ function updateCombinedNestingUI(layout, allParts) {
       const th = file.settings.thickness;
       const power = file.settings.power;
       const gas = file.settings.gas;
+      
+      console.log('Processing file:', file.name, 'with settings:', { th, power, gas, count: group.count });
+      
       const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
       
       if (can) {
@@ -422,12 +427,27 @@ function updateCombinedNestingUI(layout, allParts) {
         const gasRubPerMin = parseFloat($('gasPrice').value) || 15;
         const machRubPerHr = parseFloat($('machPrice').value) || 500;
         
+        console.log('Pricing values:', { perM, perPierce, gasRubPerMin, machRubPerHr });
+        
         const cutRubPerPart = perM * file.parsed.totalLen;
         const pierceRubPerPart = perPierce * file.parsed.pierceCount;
         const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
         const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
         const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
         const costForAllParts = totalRubPerPart * group.count;
+        
+        console.log('Calculation for', file.name, ':', {
+          cutMinPerPart,
+          pierceMinPerPart,
+          totalMinPerPart,
+          timeForAllParts,
+          cutRubPerPart,
+          pierceRubPerPart,
+          gasRubPerPart,
+          machRubPerPart,
+          totalRubPerPart,
+          costForAllParts
+        });
         
         totalTime += timeForAllParts;
         totalCost += costForAllParts;
@@ -439,19 +459,60 @@ function updateCombinedNestingUI(layout, allParts) {
           timePerPart: totalMinPerPart,
           timeForAllParts
         };
+      } else {
+        console.warn('Cannot calculate for file:', file.name, '- Can:', can);
       }
+    } else {
+      console.warn('Skipping file without required data:', file.name);
     }
   }
   
-  // Calculate average time per sheet
+  console.log('Final calculation results:', { totalTime, totalCost });
+  
+  // Calculate average time per sheet and safely update UI
   const avgTimePerSheet = layout.totalSheets > 0 ? totalTime / layout.totalSheets : 0;
   const avgCostPerSheet = layout.totalSheets > 0 ? totalCost / layout.totalSheets : 0;
   
-  // Ensure these values are displayed in the UI
-  if ($('nTime')) $('nTime').textContent = avgTimePerSheet.toFixed(2) + ' мин';
-  if ($('nTotalTime')) $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
-  if ($('nCost')) $('nCost').textContent = avgCostPerSheet.toFixed(2) + ' ₽';
-  if ($('nTotalCost')) $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
+  console.log('Final display values:', { 
+    avgTimePerSheet, 
+    avgCostPerSheet, 
+    totalTime, 
+    totalCost, 
+    sheets: layout.totalSheets 
+  });
+
+  // Ensure these values are displayed in the UI with error checking
+  try {
+    if (!isNaN(avgTimePerSheet) && isFinite(avgTimePerSheet)) {
+      $('nTime').textContent = avgTimePerSheet.toFixed(2) + ' мин';
+    } else {
+      $('nTime').textContent = '0.00 мин';
+      console.error('Invalid avgTimePerSheet:', avgTimePerSheet);
+    }
+    
+    if (!isNaN(totalTime) && isFinite(totalTime)) {
+      $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
+    } else {
+      $('nTotalTime').textContent = '0.00 мин';
+      console.error('Invalid totalTime:', totalTime);
+    }
+    
+    if (!isNaN(avgCostPerSheet) && isFinite(avgCostPerSheet)) {
+      $('nCost').textContent = avgCostPerSheet.toFixed(2) + ' ₽';
+    } else {
+      $('nCost').textContent = '0.00 ₽';
+      console.error('Invalid avgCostPerSheet:', avgCostPerSheet);
+    }
+    
+    if (!isNaN(totalCost) && isFinite(totalCost)) {
+      $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
+    } else {
+      $('nTotalCost').textContent = '0.00 ₽';
+      console.error('Invalid totalCost:', totalCost);
+    }
+  } catch (error) {
+    console.error('Error updating combined costs UI:', error);
+  }
   $('nLayoutType').textContent = 'Комбинированная';
   
   // Set up details toggle after card is shown
@@ -464,10 +525,16 @@ function autoCalculateLayout() {
   // Auto-calculate layout for included files with default quantity of 1
   const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
   
-  if (includedFiles.length === 0) return;
+  console.log('Auto calculating layout for', includedFiles.length, 'included files');
+  
+  if (includedFiles.length === 0) {
+    console.log('No files to calculate layout for');
+    return;
+  }
   
   if (includedFiles.length === 1) {
     // Single file - calculate individual nesting
+    console.log('Calculating individual nesting for file:', includedFiles[0].name);
     const file = includedFiles[0];
     calculateIndividualFileNesting(file);
     
@@ -475,6 +542,7 @@ function autoCalculateLayout() {
     state.combinedNesting = null;
   } else {
     // Multiple files - perform combined nesting
+    console.log('Performing combined nesting for', includedFiles.length, 'files');
     performCombinedNesting(includedFiles);
     
     // Clear individual nesting
@@ -563,14 +631,34 @@ function updateNestingCards(plan, file) {
       const timePerSheet = totalMinPerPart * plan.placed;
       const totalTime = timePerSheet * plan.sheets;
       
-      $('nTime').textContent = timePerSheet.toFixed(2) + ' мин';
-      $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
+      // Update time values with error checking
+      try {
+        if (!isNaN(timePerSheet) && isFinite(timePerSheet)) {
+          $('nTime').textContent = timePerSheet.toFixed(2) + ' мин';
+        } else {
+          $('nTime').textContent = '0.00 мин';
+          console.error('Invalid timePerSheet value:', timePerSheet);
+        }
+        
+        if (!isNaN(totalTime) && isFinite(totalTime)) {
+          $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
+        } else {
+          $('nTotalTime').textContent = '0.00 мин';
+          console.error('Invalid totalTime value:', totalTime);
+        }
+      } catch (error) {
+        console.error('Error updating time display:', error);
+      }
       
+      // Get pricing values with guaranteed fallbacks
       const perM = parseFloat($('pPerM').value) || 100;
       const perPierce = parseFloat($('pPierce').value) || 50;
       const gasRubPerMin = parseFloat($('gasPrice').value) || 15;
       const machRubPerHr = parseFloat($('machPrice').value) || 500;
       
+      console.log('Pricing values:', { perM, perPierce, gasRubPerMin, machRubPerHr });
+      
+      // Calculate costs with safe math operations
       const cutRubPerPart = perM * file.parsed.totalLen;
       const pierceRubPerPart = perPierce * file.parsed.pierceCount;
       const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
@@ -579,8 +667,34 @@ function updateNestingCards(plan, file) {
       const costPerSheet = totalRubPerPart * plan.placed;
       const totalCost = costPerSheet * plan.sheets;
       
-      $('nCost').textContent = costPerSheet.toFixed(2) + ' ₽';
-      $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
+      console.log('Cost calculation:', { 
+        cutRubPerPart, 
+        pierceRubPerPart, 
+        gasRubPerPart, 
+        machRubPerPart, 
+        totalRubPerPart, 
+        costPerSheet, 
+        totalCost 
+      });
+      
+      // Update UI elements with error checking
+      try {
+        if (!isNaN(costPerSheet) && isFinite(costPerSheet)) {
+          $('nCost').textContent = costPerSheet.toFixed(2) + ' ₽';
+        } else {
+          $('nCost').textContent = '0.00 ₽';
+          console.error('Invalid costPerSheet value:', costPerSheet);
+        }
+        
+        if (!isNaN(totalCost) && isFinite(totalCost)) {
+          $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
+        } else {
+          $('nTotalCost').textContent = '0.00 ₽';
+          console.error('Invalid totalCost value:', totalCost);
+        }
+      } catch (error) {
+        console.error('Error updating cost display:', error);
+      }
     } else {
       // Handle cases where calculation is not possible
       console.warn('Cannot calculate costs for file:', file.name, 'Settings:', file.settings);
@@ -1210,11 +1324,13 @@ function applyConfigurationToElements() {
   // Apply configuration to editable elements
   applyConfigToForm(elements);
   
-  // Apply readonly pricing values from config
+  // Apply readonly pricing values from config with guaranteed defaults
   const pricePerMeter = getConfig()?.pricing?.pricePerMeter || 100;
   const pricePerPierce = getConfig()?.pricing?.pricePerPierce || 50;
   const gasPricePerMinute = getConfig()?.pricing?.gasPricePerMinute || 15;
   const machineHourPrice = getConfig()?.pricing?.machineHourPrice || 500;
+  
+  console.log('Setting pricing values:', { pricePerMeter, pricePerPierce, gasPricePerMinute, machineHourPrice });
   
   if ($('pPerM')) $('pPerM').value = pricePerMeter;
   if ($('pPierce')) $('pPierce').value = pricePerPierce;
@@ -1225,6 +1341,12 @@ function applyConfigurationToElements() {
   if (state.parsed) {
     recomputeParams();
     updateCards();
+    
+    // Recalculate layout if we have one
+    if (state.nesting || state.combinedNesting) {
+      console.log('Recalculating layout after config change');
+      autoCalculateLayout();
+    }
   }
 }
 
@@ -1499,7 +1621,22 @@ function initializeEventHandlers() {
   
   on($('rotations'),'change',debouncedSaveConfig);
   
-  on($('calc'),'click',()=>{ if(!state.parsed) return; recomputeParams(); updateCards(); state.tab='annot'; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab==='annot')); safeDraw() });
+  on($('calc'),'click',()=>{ 
+    if(!state.parsed) return; 
+    console.log('Calculate button clicked - recalculating parameters');
+    recomputeParams(); 
+    updateCards(); 
+    
+    // Also ensure layout calculations are updated
+    if (state.nesting || state.combinedNesting) {
+      console.log('Recalculating layout with updated parameters');
+      autoCalculateLayout();
+    }
+    
+    state.tab='annot'; 
+    document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab==='annot')); 
+    safeDraw() 
+  });
 
   // Exports
   on($('dlOrig'),'click',()=>downloadText('original.dxf',state.rawDXF));
