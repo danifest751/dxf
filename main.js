@@ -1003,9 +1003,6 @@ function addFileToProject(file, content) {
     setActiveFile(fileObj.id);
   }
   
-  // Auto-calculate layout for the new file
-  autoCalculateLayout();
-  
   return fileObj;
 }
 
@@ -1771,6 +1768,9 @@ async function loadFile(file){
     console.log('File loaded successfully:', file.name);
     console.log('Performance report:', perfMonitor.getReport());
     setStatus(`Готово: ${file.name} - объектов: ${parsed.entities.length}, длина: ${parsed.totalLen.toFixed(3)} м`,'ok');
+    
+    // Trigger layout calculation after file is fully loaded and parsed
+    autoCalculateLayout();
   }catch(err){
     console.error('Error loading file:', file.name, err);
     setStatus(`Ошибка в ${file.name}: `+(err?.message||String(err)),'err');
@@ -1787,7 +1787,9 @@ async function loadFiles(files) {
     await loadFile(files[i]);
   }
   
-  setStatus(`Успешно загружено ${files.length} файлов`, 'ok');
+  // Final status with layout information
+  const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
+  setStatus(`Успешно загружено ${files.length} файлов, в раскладке: ${includedFiles.length}`, 'ok');
 }
 
 // Cost/time
