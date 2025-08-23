@@ -417,10 +417,10 @@ function updateCombinedNestingUI(layout, allParts) {
         const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
         const timeForAllParts = totalMinPerPart * group.count;
         
-        const perM = parseFloat($('pPerM').value);
-        const perPierce = parseFloat($('pPierce').value);
-        const gasRubPerMin = parseFloat($('gasPrice').value);
-        const machRubPerHr = parseFloat($('machPrice').value);
+        const perM = parseFloat($('pPerM').value) || 100;
+        const perPierce = parseFloat($('pPierce').value) || 50;
+        const gasRubPerMin = parseFloat($('gasPrice').value) || 15;
+        const machRubPerHr = parseFloat($('machPrice').value) || 500;
         
         const cutRubPerPart = perM * file.parsed.totalLen;
         const pierceRubPerPart = perPierce * file.parsed.pierceCount;
@@ -431,6 +431,14 @@ function updateCombinedNestingUI(layout, allParts) {
         
         totalTime += timeForAllParts;
         totalCost += costForAllParts;
+        
+        // Store calculated values for reference
+        file.calculatedCost = {
+          costPerPart: totalRubPerPart,
+          costForAllParts,
+          timePerPart: totalMinPerPart,
+          timeForAllParts
+        };
       }
     }
   }
@@ -439,10 +447,11 @@ function updateCombinedNestingUI(layout, allParts) {
   const avgTimePerSheet = layout.totalSheets > 0 ? totalTime / layout.totalSheets : 0;
   const avgCostPerSheet = layout.totalSheets > 0 ? totalCost / layout.totalSheets : 0;
   
-  $('nTime').textContent = avgTimePerSheet.toFixed(2) + ' мин';
-  $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
-  $('nCost').textContent = avgCostPerSheet.toFixed(2) + ' ₽';
-  $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
+  // Ensure these values are displayed in the UI
+  if ($('nTime')) $('nTime').textContent = avgTimePerSheet.toFixed(2) + ' мин';
+  if ($('nTotalTime')) $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
+  if ($('nCost')) $('nCost').textContent = avgCostPerSheet.toFixed(2) + ' ₽';
+  if ($('nTotalCost')) $('nTotalCost').textContent = totalCost.toFixed(2) + ' ₽';
   $('nLayoutType').textContent = 'Комбинированная';
   
   // Set up details toggle after card is shown
@@ -557,10 +566,10 @@ function updateNestingCards(plan, file) {
       $('nTime').textContent = timePerSheet.toFixed(2) + ' мин';
       $('nTotalTime').textContent = totalTime.toFixed(2) + ' мин';
       
-      const perM = parseFloat($('pPerM').value);
-      const perPierce = parseFloat($('pPierce').value);
-      const gasRubPerMin = parseFloat($('gasPrice').value);
-      const machRubPerHr = parseFloat($('machPrice').value);
+      const perM = parseFloat($('pPerM').value) || 100;
+      const perPierce = parseFloat($('pPierce').value) || 50;
+      const gasRubPerMin = parseFloat($('gasPrice').value) || 15;
+      const machRubPerHr = parseFloat($('machPrice').value) || 500;
       
       const cutRubPerPart = perM * file.parsed.totalLen;
       const pierceRubPerPart = perPierce * file.parsed.pierceCount;
@@ -1857,10 +1866,10 @@ function updateCards(){
   } else {
     // Perform new calculations and cache them
     const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
-    const perM = parseFloat(elements.pPerM.value);
-    const perPierce = parseFloat(elements.pPierce.value);
-    const gasRubPerMin = parseFloat(elements.gasPrice.value);
-    const machRubPerHr = parseFloat(elements.machPrice.value);
+    const perM = parseFloat(elements.pPerM.value) || 100;
+    const perPierce = parseFloat(elements.pPierce.value) || 50;
+    const gasRubPerMin = parseFloat(elements.gasPrice.value) || 15;
+    const machRubPerHr = parseFloat(elements.machPrice.value) || 500;
 
     const cutMin = can ? (state.parsed.totalLen * 1000) / speed : 0;
     const pierceMin = can ? (state.parsed.pierceCount * pierce) / 60 : 0;
