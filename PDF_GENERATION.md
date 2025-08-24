@@ -49,6 +49,10 @@ The system includes comprehensive error handling:
 - PDF generation errors
 - Network issues
 
+## Canvas2D Performance Optimization
+
+The system now includes the `willReadFrequently: true` option to address browser warnings about Canvas2D operations. This optimization improves performance when html2canvas reads canvas data multiple times during PDF generation.
+
 ## Common Issues and Solutions
 
 ### "Blank PDF" Error

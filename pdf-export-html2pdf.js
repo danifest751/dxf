@@ -174,7 +174,7 @@ export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
     // Wait a bit for content to render
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Configure html2pdf options
+    // Configure html2pdf options with willReadFrequently set to true to avoid warnings
     const options = {
       margin: [10, 10, 10, 10],
       filename: filename,
@@ -184,6 +184,7 @@ export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
         useCORS: true,
         allowTaint: true,
         logging: true,
+        willReadFrequently: true, // This fixes the Canvas2D warning
         onclone: function(clonedDoc) {
           console.log('Document cloned for PDF generation');
           // Ensure all styles are properly applied in the cloned document
@@ -603,7 +604,7 @@ export async function generateSimplePDFReport(data, filename = 'dxf-pro-simple-r
     // Wait a bit for content to render
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Configure html2pdf options for simple report
+    // Configure html2pdf options for simple report with willReadFrequently set to true
     const options = {
       margin: [5, 5, 5, 5],
       filename: filename,
@@ -612,6 +613,7 @@ export async function generateSimplePDFReport(data, filename = 'dxf-pro-simple-r
         scale: 1.5,
         useCORS: true,
         logging: true,
+        willReadFrequently: true, // This fixes the Canvas2D warning
         onclone: function(clonedDoc) {
           console.log('Document cloned for simple PDF generation');
           // Ensure all styles are properly applied in the cloned document
