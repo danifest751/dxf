@@ -28,80 +28,253 @@ export async function preloadJsPDF() {
  * @returns {Promise<boolean>} True if loaded successfully
  */
 async function ensureJsPDFLoaded() {
-  if (jsPDFLoaded && window.jsPDF) {
+  if (jsPDFLoaded && isJsPDFAvailable()) {
     return true;
   }
   
-  // List of CDN URLs to try
-  const cdnUrls = [
-    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-    'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
-    'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'
+  // Try more reliable CDN sources with different version strategies
+  const cdnConfigs = [
+    {
+      url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+      checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
+    },
+    {
+      url: 'https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js',
+      checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
+    },
+    {
+      url: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
+    },
+    // Try legacy version for maximum compatibility
+    {
+      url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.5.3/jspdf.min.js',
+      checkGlobal: () => window.jsPDF
+    },
+    // Alternative legacy source
+    {
+      url: 'https://unpkg.com/jspdf@1.5.3/dist/jspdf.min.js',
+      checkGlobal: () => window.jsPDF
+    }
   ];
   
-  for (const url of cdnUrls) {
+  console.log('Attempting to load jsPDF from CDNs...');
+  
+  for (let i = 0; i < cdnConfigs.length; i++) {
+    const config = cdnConfigs[i];
+    console.log(`Trying CDN ${i + 1}/${cdnConfigs.length}: ${config.url}`);
+    
     try {
-      await loadJsPDFFromUrl(url);
-      if (window.jsPDF) {
+      await loadJsPDFFromUrl(config.url, config.checkGlobal);
+      if (isJsPDFAvailable()) {
         jsPDFLoaded = true;
+        console.log('jsPDF loaded and verified from:', config.url);
         return true;
       }
     } catch (error) {
-      console.warn(`Failed to load jsPDF from ${url}:`, error.message);
+      console.warn(`Failed to load jsPDF from ${config.url}:`, error.message);
       continue;
     }
   }
   
-  throw new Error('Не удалось загрузить библиотеку jsPDF ни с одного из CDN');
+  console.error('All jsPDF CDN attempts failed');
+  throw new Error('Не удалось загрузить библиотеку jsPDF ни с одного из CDN. Проверьте соединение с интернетом.');
+}
+
+/**
+ * Check if jsPDF is available and working
+ * @returns {boolean}
+ */
+function isJsPDFAvailable() {
+  try {
+    // Try different possible global locations
+    if (window.jsPDF && typeof window.jsPDF === 'function') {
+      return true;
+    }
+    
+    if (window.jspdf && window.jspdf.jsPDF && typeof window.jspdf.jsPDF === 'function') {
+      // Alias for convenience
+      window.jsPDF = window.jspdf.jsPDF;
+      return true;
+    }
+    
+    // Check global scope
+    if (typeof jsPDF !== 'undefined' && typeof jsPDF === 'function') {
+      window.jsPDF = jsPDF;
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.warn('Error checking jsPDF availability:', error);
+    return false;
+  }
 }
 
 /**
  * Loads jsPDF from a specific URL
  * @param {string} url - CDN URL to load from
+ * @param {Function} checkGlobal - Function to check if jsPDF is available
  * @returns {Promise<void>}
  */
-function loadJsPDFFromUrl(url) {
+function loadJsPDFFromUrl(url, checkGlobal) {
   return new Promise((resolve, reject) => {
-    // Check if already exists
-    if (window.jsPDF) {
+    // Quick check if already available
+    if (isJsPDFAvailable()) {
       resolve();
       return;
     }
     
     // Remove existing script if any
     if (jsPDFScript) {
-      document.head.removeChild(jsPDFScript);
+      try {
+        document.head.removeChild(jsPDFScript);
+        jsPDFScript = null;
+      } catch (e) {
+        // Script might have been removed already
+      }
     }
     
-    // Create new script
+    // Create new script element
     jsPDFScript = document.createElement('script');
     jsPDFScript.src = url;
+    jsPDFScript.async = true;
     jsPDFScript.crossOrigin = 'anonymous';
     
-    // Set timeout for loading
-    const timeout = setTimeout(() => {
-      reject(new Error('Loading timeout'));
-    }, 10000);
+    // Set loading timeout
+    const loadTimeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Script loading timeout'));
+    }, 20000); // 20 second timeout
+    
+    function cleanup() {
+      clearTimeout(loadTimeout);
+      if (jsPDFScript && jsPDFScript.parentNode) {
+        try {
+          document.head.removeChild(jsPDFScript);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    }
     
     jsPDFScript.onload = () => {
-      clearTimeout(timeout);
-      // Wait a bit for the library to initialize
-      setTimeout(() => {
-        if (window.jsPDF) {
+      console.log(`Script loaded from ${url}, checking for jsPDF...`);
+      
+      // Start checking for jsPDF availability
+      let checkAttempts = 0;
+      const maxCheckAttempts = 15;
+      
+      const checkAvailability = () => {
+        checkAttempts++;
+        
+        // Use the provided check function first
+        if (checkGlobal && checkGlobal()) {
+          cleanup();
           resolve();
-        } else {
-          reject(new Error('jsPDF не смог инициализироваться'));
+          return;
         }
-      }, 300);
+        
+        // Fallback to our standard check
+        if (isJsPDFAvailable()) {
+          cleanup();
+          resolve();
+          return;
+        }
+        
+        // Continue checking if we haven't reached max attempts
+        if (checkAttempts < maxCheckAttempts) {
+          setTimeout(checkAvailability, 300);
+        } else {
+          cleanup();
+          reject(new Error('jsPDF не смог инициализироваться после загрузки'));
+        }
+      };
+      
+      // Start checking after a brief delay to allow initialization
+      setTimeout(checkAvailability, 100);
     };
     
     jsPDFScript.onerror = () => {
-      clearTimeout(timeout);
+      cleanup();
       reject(new Error('Ошибка загрузки скрипта'));
     };
     
+    // Add script to document
     document.head.appendChild(jsPDFScript);
   });
+}
+
+/**
+ * Debug function to check what jsPDF objects are available
+ */
+function debugJsPDFAvailability() {
+  console.log('=== jsPDF Debug Info ===');
+  console.log('window.jsPDF:', typeof window.jsPDF, window.jsPDF);
+  console.log('window.jspdf:', typeof window.jspdf, window.jspdf);
+  console.log('global jsPDF:', typeof jsPDF !== 'undefined' ? jsPDF : 'undefined');
+  
+  // Check for common global variables
+  const globalVars = ['jsPDF', 'jspdf', 'JSPDF'];
+  globalVars.forEach(varName => {
+    if (window[varName]) {
+      console.log(`window.${varName}:`, typeof window[varName], window[varName]);
+    }
+  });
+  
+  console.log('=== End Debug Info ===');
+}
+
+/**
+ * Creates a simple text-based report as fallback when PDF generation fails
+ */
+function createSimpleFallbackReport(state, layout, files) {
+  console.log('Creating simple text-based report as PDF fallback...');
+  
+  const reportLines = [];
+  reportLines.push('DXF PRO - Отчет по раскладке');
+  reportLines.push('='.repeat(50));
+  reportLines.push('');
+  reportLines.push(`Дата: ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU')}`);
+  reportLines.push('');
+  
+  // Summary
+  reportLines.push('Сводка:');
+  reportLines.push(`Количество листов: ${layout.totalSheets || layout.sheets || '—'}`);
+  reportLines.push(`Эффективность: ${layout.efficiency ? layout.efficiency.toFixed(1) + '%' : '—'}`);
+  reportLines.push('');
+  
+  // Calculate totals if possible
+  if (files && files.length > 0) {
+    let totalTime = 0;
+    let totalCost = 0;
+    
+    files.forEach(file => {
+      if (file.calculatedCost) {
+        totalTime += file.calculatedCost.timeForAllParts || 0;
+        totalCost += file.calculatedCost.costForAllParts || 0;
+      }
+    });
+    
+    reportLines.push('Итоги:');
+    reportLines.push(`Общее время: ${totalTime.toFixed(2)} мин`);
+    reportLines.push(`Общая стоимость: ${totalCost.toFixed(2)} ₽`);
+  }
+  
+  const reportText = reportLines.join('\n');
+  
+  // Download as text file since PDF generation failed
+  const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `DXF_PRO_Report_${new Date().getTime()}.txt`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  
+  console.log('Simple text report created and downloaded');
 }
 
 /**
@@ -112,14 +285,48 @@ function loadJsPDFFromUrl(url) {
  */
 export async function generatePDFReport(state, layout, files = null) {
   try {
+    console.log('Starting PDF generation...');
+    
+    // Debug jsPDF availability
+    debugJsPDFAvailability();
+    
     // Ensure jsPDF is loaded
     await ensureJsPDFLoaded();
     
-    if (!window.jsPDF) {
-      throw new Error('jsPDF library not available');
+    // Get jsPDF constructor with improved detection
+    const PDFConstructor = getJsPDFConstructor();
+    
+    if (!PDFConstructor) {
+      throw new Error('jsPDF constructor not found after loading');
     }
     
-    const pdf = new window.jsPDF();
+    console.log('Creating PDF instance with constructor:', typeof PDFConstructor);
+    
+    // Try to create PDF instance with error handling for different versions
+    let pdf;
+    try {
+      pdf = new PDFConstructor();
+    } catch (constructorError) {
+      console.warn('Standard constructor failed, trying alternative approaches:', constructorError);
+      
+      // Try different constructor patterns for different versions
+      if (window.jsPDF && typeof window.jsPDF === 'function') {
+        pdf = new window.jsPDF();
+      } else if (window.jspdf && window.jspdf.jsPDF) {
+        pdf = new window.jspdf.jsPDF();
+      } else {
+        throw new Error('No working jsPDF constructor found');
+      }
+    }
+    
+    // Verify PDF instance is valid
+    if (!pdf || typeof pdf.text !== 'function') {
+      throw new Error('jsPDF instance is invalid or missing required methods');
+    }
+    
+    console.log('PDF instance created successfully, methods available:', 
+      Object.getOwnPropertyNames(pdf).filter(name => typeof pdf[name] === 'function').slice(0, 10));
+    
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     
@@ -162,13 +369,54 @@ export async function generatePDFReport(state, layout, files = null) {
       ? `DXF_PRO_Report_${files.length}_files_${now.getTime()}.pdf`
       : `DXF_PRO_Report_${now.getTime()}.pdf`;
     
+    console.log('Saving PDF file:', fileName);
     pdf.save(fileName);
     
+    console.log('PDF generated and downloaded successfully');
     return true;
   } catch (error) {
     console.error('PDF generation error:', error);
-    throw new Error(`Ошибка создания PDF: ${error.message}`);
+    
+    // As a last resort, try to create a simple text report
+    try {
+      console.log('PDF generation failed, creating text report as fallback...');
+      createSimpleFallbackReport(state, layout, files);
+      throw new Error(`PDF недоступен, создан текстовый отчет: ${error.message}`);
+    } catch (fallbackError) {
+      throw new Error(`Ошибка создания отчета: ${error.message}`);
+    }
   }
+}
+
+/**
+ * Get jsPDF constructor with improved detection
+ * @returns {Function|null} jsPDF constructor or null if not found
+ */
+function getJsPDFConstructor() {
+  // Try different possible locations and patterns
+  const candidates = [
+    () => window.jsPDF,
+    () => window.jspdf && window.jspdf.jsPDF,
+    () => typeof jsPDF !== 'undefined' ? jsPDF : null,
+    () => window.jspdf,
+    () => window.JSPDF
+  ];
+  
+  for (const getCandidate of candidates) {
+    try {
+      const candidate = getCandidate();
+      if (candidate && typeof candidate === 'function') {
+        console.log('Found jsPDF constructor:', candidate.name || 'anonymous function');
+        return candidate;
+      }
+    } catch (error) {
+      // Continue to next candidate
+      continue;
+    }
+  }
+  
+  console.error('No jsPDF constructor found in any expected location');
+  return null;
 }
 
 function addSummarySection(pdf, layout, margin, yPos, lineHeight) {
