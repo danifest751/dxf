@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Calculation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1e293b; color: #f1f5f9; }
+        .test-section { margin: 20px 0; padding: 15px; background: #334155; border-radius: 8px; }
+        .result { padding: 10px; margin: 5px 0; border-radius: 4px; }
+        .success { background: #10b981; color: white; }
+        .error { background: #ef4444; color: white; }
+        .info { background: #3b82f6; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🧪 DXF PRO - Cost Calculation Test</h1>
+    
+    <div class="test-section">
+        <h2>Testing Cost Calculation Functions</h2>
+        <div id="test-results"></div>
+        <button onclick="runTests()">Run Tests</button>
+    </div>
+
+    <script type="module">
+        import { calcCutParams, getSupportedPowers, getSupportedGases } from './cost.js';
+        
+        window.runTests = function() {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '';
+            
+            function addResult(message, type = 'info') {
+                const div = document.createElement('div');
+                div.className = `result ${type}`;
+                div.textContent = message;
+                resultsDiv.appendChild(div);
+            }
+            
+            addResult('🔍 Testing Cost Calculation Functions', 'info');
+            
+            // Test 1: Valid parameters
+            try {
+                const result1 = calcCutParams(1.5, 3, 'nitrogen');
+                if (result1.can && result1.speed > 0 && result1.pierce > 0) {
+                    addResult(`✅ Test 1 PASSED: Valid params (1.5kW, 3mm, nitrogen) - Speed: ${result1.speed}, Pierce: ${result1.pierce}`, 'success');
+                } else {
+                    addResult(`❌ Test 1 FAILED: Expected valid result but got: ${JSON.stringify(result1)}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Test 1 ERROR: ${error.message}`, 'error');
+            }
+            
+            // Test 2: String parameters (common issue)
+            try {
+                const result2 = calcCutParams("1.5", "3", "nitrogen");
+                if (result2.can && result2.speed > 0 && result2.pierce > 0) {
+                    addResult(`✅ Test 2 PASSED: String params ("1.5", "3", "nitrogen") - Speed: ${result2.speed}, Pierce: ${result2.pierce}`, 'success');
+                } else {
+                    addResult(`❌ Test 2 FAILED: Expected valid result but got: ${JSON.stringify(result2)}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Test 2 ERROR: ${error.message}`, 'error');
+            }
+            
+            // Test 3: Invalid thickness
+            try {
+                const result3 = calcCutParams(1.5, 25, 'nitrogen');
+                if (!result3.can && result3.reason.includes('Недостаточная мощность')) {
+                    addResult(`✅ Test 3 PASSED: Invalid thickness properly rejected`, 'success');
+                } else {
+                    addResult(`❌ Test 3 FAILED: Expected rejection but got: ${JSON.stringify(result3)}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Test 3 ERROR: ${error.message}`, 'error');
+            }
+            
+            // Test 4: Get supported powers
+            try {
+                const powers = getSupportedPowers();
+                if (Array.isArray(powers) && powers.length > 0) {
+                    addResult(`✅ Test 4 PASSED: Supported powers: ${powers.join(', ')} kW`, 'success');
+                } else {
+                    addResult(`❌ Test 4 FAILED: Expected array of powers`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Test 4 ERROR: ${error.message}`, 'error');
+            }
+            
+            // Test 5: Get supported gases
+            try {
+                const gases = getSupportedGases();
+                if (Array.isArray(gases) && gases.includes('nitrogen')) {
+                    addResult(`✅ Test 5 PASSED: Supported gases: ${gases.join(', ')}`, 'success');
+                } else {
+                    addResult(`❌ Test 5 FAILED: Expected array of gases including nitrogen`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Test 5 ERROR: ${error.message}`, 'error');
+            }
+            
+            addResult('🏁 Test execution completed', 'info');
+        };
+    </script>
+</body>
+</html>

@@ -87,9 +87,20 @@ function validateInputs(power, th, gas) {
  * @returns {CutParams} Параметры резки
  */
 export function calcCutParams(power, th, gas) {
+  // Convert string values to numbers if needed
+  if (typeof power === 'string') {
+    power = parseFloat(power);
+  }
+  if (typeof th === 'string') {
+    th = parseFloat(th);
+  }
+  
+  console.log('calcCutParams called with:', { power, th, gas, types: { power: typeof power, th: typeof th, gas: typeof gas } });
+  
   // Валидация входных данных
   const validation = validateInputs(power, th, gas);
   if (!validation.isValid) {
+    console.warn('Validation failed:', validation.errors);
     return {
       can: false,
       reason: validation.errors.join('; ')

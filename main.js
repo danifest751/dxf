@@ -81,6 +81,30 @@ function createFileObject(file, content) {
   };
 }
 
+// Ensure all files have proper settings
+function validateFileSettings() {
+  projectState.files.forEach(file => {
+    if (!file.settings) {
+      file.settings = {
+        thickness: parseFloat($('th')?.value || '3'),
+        power: $('power')?.value || '1.5',
+        gas: $('gas')?.value || 'nitrogen'
+      };
+      console.log('Fixed missing settings for file:', file.name, file.settings);
+    }
+    // Ensure numeric values are properly parsed
+    if (typeof file.settings.thickness === 'string') {
+      file.settings.thickness = parseFloat(file.settings.thickness);
+    }
+    if (!file.settings.power) {
+      file.settings.power = $('power')?.value || '1.5';
+    }
+    if (!file.settings.gas) {
+      file.settings.gas = $('gas')?.value || 'nitrogen';
+    }
+  });
+}
+
 // Get active file
 function getActiveFile() {
   return projectState.files.find(f => f.id === projectState.activeFileId);
@@ -114,9 +138,31 @@ function setActiveFile(fileId) {
     // Validate state synchronization
     validateStateSynchronization();
     
+    // Ensure file has proper settings
+    if (!file.settings) {
+      file.settings = {
+        thickness: parseFloat($('th')?.value || '3'),
+        power: $('power')?.value || '1.5',
+        gas: $('gas')?.value || 'nitrogen'
+      };
+    }
+    
     // Update nesting cards if we have nesting data
     if (file.nesting) {
       updateNestingCards(file.nesting, file);
+    } else if (state.combinedNesting) {
+      // If we're in combined mode, update combined UI
+      const includedFiles = projectState.files.filter(f => f.includeInLayout && f.parsed);
+      if (includedFiles.length > 1) {
+        const allParts = [];
+        includedFiles.forEach(f => {
+          const quantity = f.quantity || 1;
+          for (let i = 0; i < quantity; i++) {
+            allParts.push({ file: f });
+          }
+        });
+        updateCombinedNestingUI(state.combinedNesting, allParts);
+      }
     }
     
     // Update UI
@@ -407,12 +453,36 @@ function updateCombinedNestingUI(layout, allParts) {
   // Calculate time and cost for each file group
   for (const group of Object.values(fileGroups)) {
     const file = group.file;
+    console.log('Processing file for cost calculation:', file.name, {
+      parsed: !!file.parsed,
+      totalLen: file.parsed?.totalLen,
+      pierceCount: file.parsed?.pierceCount,
+      settings: file.settings,
+      count: group.count
+    });
+    
     if (file.parsed && file.parsed.totalLen && file.parsed.pierceCount) {
+      // Ensure file has proper settings
+      if (!file.settings) {
+        console.warn('File missing settings, initializing defaults:', file.name);
+        file.settings = {
+          thickness: parseFloat($('th')?.value || '3'),
+          power: $('power')?.value || '1.5',
+          gas: $('gas')?.value || 'nitrogen'
+        };
+      }
+      
       const th = file.settings.thickness;
       const power = file.settings.power;
       const gas = file.settings.gas;
       
       console.log('Processing file:', file.name, 'with settings:', { th, power, gas, count: group.count });
+      
+      // Validate settings before calculation
+      if (!th || !power || !gas) {
+        console.warn('Missing required settings for file:', file.name, { th, power, gas });
+        continue;
+      }
       
       const {can, speed, pierce, gasCons} = calcCutParams(power, th, gas);
       
@@ -463,7 +533,11 @@ function updateCombinedNestingUI(layout, allParts) {
         console.warn('Cannot calculate for file:', file.name, '- Can:', can);
       }
     } else {
-      console.warn('Skipping file without required data:', file.name);
+      console.warn('Skipping file without required data:', file.name, {
+        parsed: !!file.parsed,
+        totalLen: file.parsed?.totalLen,
+        pierceCount: file.parsed?.pierceCount
+      });
     }
   }
   
@@ -522,6 +596,9 @@ function updateCombinedNestingUI(layout, allParts) {
 }
 
 function autoCalculateLayout() {
+  // Ensure all files have proper settings first
+  validateFileSettings();
+  
   // Auto-calculate layout for included files with default quantity of 1
   const includedFiles = projectState.files.filter(file => file.includeInLayout && file.parsed);
   
@@ -529,6 +606,8 @@ function autoCalculateLayout() {
   
   if (includedFiles.length === 0) {
     console.log('No files to calculate layout for');
+    const nestCard = document.getElementById('nestCard');
+    if (nestCard) nestCard.hidden = true;
     return;
   }
   
@@ -608,9 +687,27 @@ function updateNestingCards(plan, file) {
   
   // Calculate time and cost per sheet and totals
   if (file.parsed && file.parsed.totalLen && file.parsed.pierceCount) {
+    // Ensure file has proper settings
+    if (!file.settings) {
+      console.warn('File missing settings, initializing defaults:', file.name);
+      file.settings = {
+        thickness: parseFloat($('th')?.value || '3'),
+        power: $('power')?.value || '1.5',
+        gas: $('gas')?.value || 'nitrogen'
+      };
+    }
+    
     const th = file.settings.thickness;
     const power = file.settings.power;
     const gas = file.settings.gas;
+    
+    console.log('Single file cost calculation for:', file.name, {
+      th, power, gas,
+      totalLen: file.parsed.totalLen,
+      pierceCount: file.parsed.pierceCount,
+      placed: plan.placed,
+      sheets: plan.sheets
+    });
     
     // Validate that we have all required settings
     if (!th || !power || !gas) {
@@ -1562,6 +1659,11 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.thickness = parseFloat($('th').value);
       }
+      // Recalculate layout if settings changed
+      if (state.nesting || state.combinedNesting) {
+        console.log('Recalculating layout after thickness change');
+        autoCalculateLayout();
+      }
     } 
     debouncedSaveConfig(); 
   });
@@ -1574,6 +1676,11 @@ function initializeEventHandlers() {
       if (activeFile) {
         activeFile.settings.power = $('power').value;
       }
+      // Recalculate layout if settings changed
+      if (state.nesting || state.combinedNesting) {
+        console.log('Recalculating layout after power change');
+        autoCalculateLayout();
+      }
     } 
     debouncedSaveConfig();
   });
@@ -1585,6 +1692,11 @@ function initializeEventHandlers() {
       const activeFile = getActiveFile();
       if (activeFile) {
         activeFile.settings.gas = $('gas').value;
+      }
+      // Recalculate layout if settings changed
+      if (state.nesting || state.combinedNesting) {
+        console.log('Recalculating layout after gas change');
+        autoCalculateLayout();
       }
     } 
     debouncedSaveConfig();
@@ -1927,6 +2039,9 @@ async function loadFile(file){
     console.log('File loaded successfully:', file.name);
     console.log('Performance report:', perfMonitor.getReport());
     setStatus(`Готово: ${file.name} - объектов: ${parsed.entities.length}, длина: ${parsed.totalLen.toFixed(3)} м`,'ok');
+    
+    // Ensure file has proper settings before layout calculation
+    validateFileSettings();
     
     // Trigger layout calculation after file is fully loaded and parsed
     autoCalculateLayout();
