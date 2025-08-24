@@ -3,20 +3,21 @@
  * Generates detailed reports with calculation data, part tables, and layout graphics
  */
 
-// Global variable to track if jsPDF is loaded
 let jsPDFLoaded = false;
 let jsPDFScript = null;
 
 /**
- * Preloads jsPDF library for better performance (optional)
- * Call this during application initialization
- * @returns {Promise<boolean>} True if loaded successfully
+ * Preload jsPDF library for better performance
+ * @returns {Promise<boolean>} True if preloaded successfully
  */
 export async function preloadJsPDF() {
   try {
-    await ensureJsPDFLoaded();
-    console.log('jsPDF preloaded successfully');
-    return true;
+    console.log('Preloading jsPDF library...');
+    const success = await ensureJsPDFLoaded();
+    if (success) {
+      console.log('jsPDF preloaded successfully');
+    }
+    return success;
   } catch (error) {
     console.warn('jsPDF preload failed:', error.message);
     return false;
@@ -132,65 +133,28 @@ function loadJsPDFFromUrl(url, checkGlobal) {
     jsPDFScript = document.createElement('script');
     jsPDFScript.src = url;
     jsPDFScript.async = true;
-    jsPDFScript.crossOrigin = 'anonymous';
     
-    // Set loading timeout
-    const loadTimeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('Script loading timeout'));
-    }, 20000); // 20 second timeout
-    
-    function cleanup() {
-      clearTimeout(loadTimeout);
-      if (jsPDFScript && jsPDFScript.parentNode) {
-        try {
-          document.head.removeChild(jsPDFScript);
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-      }
-    }
+    // Set timeout for loading
+    const timeout = setTimeout(() => {
+      reject(new Error('Timeout loading jsPDF'));
+    }, 10000); // 10 second timeout
     
     jsPDFScript.onload = () => {
-      console.log(`Script loaded from ${url}, checking for jsPDF...`);
+      clearTimeout(timeout);
       
-      // Start checking for jsPDF availability
-      let checkAttempts = 0;
-      const maxCheckAttempts = 15;
-      
-      const checkAvailability = () => {
-        checkAttempts++;
-        
-        // Use the provided check function first
-        if (checkGlobal && checkGlobal()) {
-          cleanup();
+      // Wait a bit for the script to initialize
+      setTimeout(() => {
+        if (checkGlobal()) {
           resolve();
-          return;
-        }
-        
-        // Fallback to our standard check
-        if (isJsPDFAvailable()) {
-          cleanup();
-          resolve();
-          return;
-        }
-        
-        // Continue checking if we haven't reached max attempts
-        if (checkAttempts < maxCheckAttempts) {
-          setTimeout(checkAvailability, 300);
         } else {
-          cleanup();
-          reject(new Error('jsPDF не смог инициализироваться после загрузки'));
+          reject(new Error('jsPDF not found after loading'));
         }
-      };
-      
-      // Start checking after a brief delay to allow initialization
-      setTimeout(checkAvailability, 100);
+      }, 100);
     };
     
     jsPDFScript.onerror = () => {
-      cleanup();
-      reject(new Error('Ошибка загрузки скрипта'));
+      clearTimeout(timeout);
+      reject(new Error(`Failed to load jsPDF from ${url}`));
     };
     
     // Add script to document
@@ -199,72 +163,89 @@ function loadJsPDFFromUrl(url, checkGlobal) {
 }
 
 /**
- * Debug function to check what jsPDF objects are available
+ * Debug function to check jsPDF availability
  */
 function debugJsPDFAvailability() {
   console.log('=== jsPDF Debug Info ===');
-  console.log('window.jsPDF:', typeof window.jsPDF, window.jsPDF);
-  console.log('window.jspdf:', typeof window.jspdf, window.jspdf);
-  console.log('global jsPDF:', typeof jsPDF !== 'undefined' ? jsPDF : 'undefined');
-  
-  // Check for common global variables
-  const globalVars = ['jsPDF', 'jspdf', 'JSPDF'];
-  globalVars.forEach(varName => {
-    if (window[varName]) {
-      console.log(`window.${varName}:`, typeof window[varName], window[varName]);
-    }
-  });
-  
-  console.log('=== End Debug Info ===');
+  console.log('window.jsPDF:', typeof window.jsPDF);
+  console.log('window.jspdf:', typeof window.jspdf);
+  console.log('window.jspdf?.jsPDF:', typeof window.jspdf?.jsPDF);
+  console.log('jsPDFLoaded flag:', jsPDFLoaded);
+  console.log('isJsPDFAvailable():', isJsPDFAvailable());
+  console.log('========================');
 }
 
 /**
- * Creates a simple text-based report as fallback when PDF generation fails
+ * Get current file from state
+ * @param {Object} state - Application state
+ * @returns {Object|null} Current file object
+ */
+function getCurrentFile(state) {
+  // For backward compatibility, try to construct file object from state
+  if (state.parsed) {
+    return {
+      name: 'current_file.dxf',
+      parsed: state.parsed,
+      settings: {
+        thickness: parseFloat(document.getElementById('th')?.value || '3'),
+        power: document.getElementById('power')?.value || '1.5',
+        gas: document.getElementById('gas')?.value || 'nitrogen'
+      },
+      calculatedCost: state.calculatedCost || null,
+      quantity: 1
+    };
+  }
+  return null;
+}
+
+/**
+ * Create simple text report as fallback
+ * @param {Object} state - Application state
+ * @param {Object} layout - Layout data
+ * @param {Array} files - Array of file objects
  */
 function createSimpleFallbackReport(state, layout, files) {
-  console.log('Creating simple text-based report as PDF fallback...');
-  
   const reportLines = [];
+  const now = new Date();
+  
   reportLines.push('DXF PRO - Отчет по раскладке');
-  reportLines.push('='.repeat(50));
-  reportLines.push('');
-  reportLines.push(`Дата: ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU')}`);
+  reportLines.push(`Дата создания: ${now.toLocaleDateString('ru-RU')} ${now.toLocaleTimeString('ru-RU')}`);
   reportLines.push('');
   
-  // Summary
-  reportLines.push('Сводка:');
-  reportLines.push(`Количество листов: ${layout.totalSheets || layout.sheets || '—'}`);
-  reportLines.push(`Эффективность: ${layout.efficiency ? layout.efficiency.toFixed(1) + '%' : '—'}`);
-  reportLines.push('');
+  if (layout) {
+    reportLines.push('Сводка по раскладке:');
+    reportLines.push(`Количество листов: ${layout.sheets || layout.totalSheets || 1}`);
+    if (layout.efficiency) {
+      reportLines.push(`Эффективность: ${layout.efficiency.toFixed(1)}%`);
+    }
+    reportLines.push('');
+  }
   
-  // Calculate totals if possible
   if (files && files.length > 0) {
-    let totalTime = 0;
-    let totalCost = 0;
-    
-    files.forEach(file => {
-      if (file.calculatedCost) {
-        totalTime += file.calculatedCost.timeForAllParts || 0;
-        totalCost += file.calculatedCost.costForAllParts || 0;
+    reportLines.push('Данные по деталям:');
+    files.forEach((file, index) => {
+      if (file.parsed) {
+        reportLines.push(`${index + 1}. ${file.name}`);
+        reportLines.push(`   Длина реза: ${file.parsed.totalLen ? file.parsed.totalLen.toFixed(3) : '—'} м`);
+        reportLines.push(`   Количество врезок: ${file.parsed.pierceCount || '—'}`);
+        if (file.calculatedCost) {
+          reportLines.push(`   Время на деталь: ${file.calculatedCost.timePerPart ? file.calculatedCost.timePerPart.toFixed(1) : '—'} мин`);
+          reportLines.push(`   Стоимость детали: ${file.calculatedCost.costPerPart ? file.calculatedCost.costPerPart.toFixed(0) : '—'} ₽`);
+        }
+        reportLines.push('');
       }
     });
-    
-    reportLines.push('Итоги:');
-    reportLines.push(`Общее время: ${totalTime.toFixed(2)} мин`);
-    reportLines.push(`Общая стоимость: ${totalCost.toFixed(2)} ₽`);
   }
   
   const reportText = reportLines.join('\n');
-  
-  // Download as text file since PDF generation failed
   const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `DXF_PRO_Report_${new Date().getTime()}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `DXF_PRO_Report_${now.getTime()}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
   
   console.log('Simple text report created and downloaded');
@@ -541,31 +522,27 @@ function getJsPDFConstructor() {
 }
 
 function addSummarySection(pdf, layout, margin, yPos, lineHeight, maxContentHeight) {
-  pdf.setFontSize(14);
+  if (!layout) return yPos;
+  
+  pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
-  addRussianText(pdf, 'Сводка по раскладке', margin, yPos);
-  yPos += lineHeight * 1.5;
+  addRussianText(pdf, 'Сводка по раскладке:', margin, yPos);
+  yPos += lineHeight;
   
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   
   const summaryData = [
-    ['Количество листов:', layout.totalSheets || layout.sheets || '—'],
+    ['Количество листов:', String(layout.sheets || layout.totalSheets || 1)],
     ['Эффективность:', layout.efficiency ? `${layout.efficiency.toFixed(1)}%` : '—'],
-    ['Размер листа:', `${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} мм`],
-    ['Отступ:', `${document.getElementById('margin')?.value || '—'} мм`],
-    ['Зазор:', `${document.getElementById('spacing')?.value || '—'} мм`]
+    ['Размер листа:', `${layout.sheetWidth || 1250}x${layout.sheetHeight || 2500} мм`],
+    ['Отступ:', `${layout.margin || 10} мм`],
+    ['Зазор:', `${layout.gap || 2} мм`]
   ];
   
   summaryData.forEach(([label, value]) => {
-    // Check if we need a new page
-    if (yPos > maxContentHeight) {
-      pdf.addPage();
-      yPos = 20;
-    }
-    
     addRussianText(pdf, label, margin, yPos);
-    addRussianText(pdf, String(value), margin + 80, yPos);
+    addRussianText(pdf, value, margin + 80, yPos);
     yPos += lineHeight;
   });
   
@@ -576,93 +553,87 @@ function addSingleFilePartsTable(pdf, file, layout, margin, yPos, lineHeight, pa
   if (!file || !file.parsed) return yPos;
   
   // Check if we need a new page
-  if (yPos > maxContentHeight - 120) {
+  if (yPos > maxContentHeight - 150) {
     pdf.addPage();
     yPos = 20;
   }
   
-  pdf.setFontSize(14);
+  pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
-  addRussianText(pdf, 'Данные по детали', margin, yPos);
+  addRussianText(pdf, 'Данные по детали:', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   
-  // Handle filename with icon and multiline support
-  const iconWidth = addDXFIcon(pdf, margin + 80, yPos);
-  pdf.setFontSize(10);
-  pdf.setTextColor(0, 0, 0);
-  
-  addRussianText(pdf, 'Файл:', margin, yPos);
-  const fileNameHeight = addRussianText(pdf, file.name, margin + 80 + iconWidth, yPos, {
-    maxWidth: pageWidth - margin * 2 - 80 - iconWidth,
-    maxLines: 2,
-    lineHeight: lineHeight
-  });
-  yPos += Math.max(lineHeight, fileNameHeight);
-  
-  const tableData = [
-    ['Длина реза:', `${file.parsed.totalLen?.toFixed(3) || '—'} м`],
-    ['Количество врезок:', file.parsed.pierceCount || '—'],
-    ['Количество объектов:', file.parsed.entities?.length || '—'],
-    ['Толщина:', `${file.settings?.thickness || '—'} мм`],
-    ['Мощность лазера:', `${file.settings?.power || '—'} кВт`],
-    ['Тип газа:', file.settings?.gas || '—']
+  const partData = [
+    ['Файл:', file.name],
+    ['Длина реза:', file.parsed.totalLen ? `${file.parsed.totalLen.toFixed(3)} м` : '—'],
+    ['Количество врезок:', String(file.parsed.pierceCount || '—')],
+    ['Количество объектов:', String(file.parsed.entities ? file.parsed.entities.length : '—')],
+    ['Толщина:', `${file.settings?.thickness || 3} мм`],
+    ['Мощность лазера:', `${file.settings?.power || 1.5} кВт`],
+    ['Тип газа:', file.settings?.gas || 'nitrogen']
   ];
   
-  // Add cost calculations if available
-  if (file.calculatedCost) {
-    tableData.push(
-      ['Время на деталь:', `${file.calculatedCost.timePerPart?.toFixed(2) || '—'} мин`],
-      ['Стоимость детали:', `${file.calculatedCost.costPerPart?.toFixed(2) || '—'} ₽`]
-    );
-  }
-  
-  tableData.forEach(([label, value]) => {
-    // Check if we need a new page
-    if (yPos > maxContentHeight) {
-      pdf.addPage();
-      yPos = 20;
-    }
-    
+  partData.forEach(([label, value]) => {
     addRussianText(pdf, label, margin, yPos);
-    addRussianText(pdf, String(value), margin + 80, yPos);
+    addRussianText(pdf, value, margin + 80, yPos);
     yPos += lineHeight;
   });
+  
+  if (file.calculatedCost) {
+    yPos += lineHeight;
+    addRussianText(pdf, 'Расчет стоимости:', margin, yPos);
+    yPos += lineHeight;
+    
+    const costData = [
+      ['Время на деталь:', `${file.calculatedCost.timePerPart ? file.calculatedCost.timePerPart.toFixed(1) : '—'} мин`],
+      ['Стоимость детали:', `${file.calculatedCost.costPerPart ? file.calculatedCost.costPerPart.toFixed(0) : '—'} ₽`],
+      ['Общее время:', `${file.calculatedCost.timeForAllParts ? file.calculatedCost.timeForAllParts.toFixed(1) : '—'} мин`],
+      ['Общая стоимость:', `${file.calculatedCost.costForAllParts ? file.calculatedCost.costForAllParts.toFixed(0) : '—'} ₽`]
+    ];
+    
+    costData.forEach(([label, value]) => {
+      addRussianText(pdf, label, margin + 10, yPos);
+      addRussianText(pdf, value, margin + 90, yPos);
+      yPos += lineHeight;
+    });
+  }
   
   return yPos + lineHeight;
 }
 
 function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pageWidth, pageHeight) {
+  if (!files || files.length === 0) return yPos;
+  
   // Check if we need a new page
-  if (yPos > pageHeight - 150) {
+  if (yPos > pageHeight - 200) {
     pdf.addPage();
     yPos = 20;
   }
   
-  pdf.setFontSize(14);
+  pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
-  addRussianText(pdf, 'Детали в раскладке', margin, yPos);
+  addRussianText(pdf, 'Детали в раскладке:', margin, yPos);
   yPos += lineHeight * 1.5;
   
-  pdf.setFontSize(8);
-  pdf.setFont('helvetica', 'normal');
-  
-  // Table headers with Russian text
+  // Table headers
   const headers = ['Файл', 'Кол-во', 'Длина (м)', 'Врезки', 'Время (мин)', 'Стоимость (₽)'];
-  const colWidths = [70, 20, 25, 20, 25, 30]; // Increased filename column width
-  let xPos = margin;
+  const colWidths = [70, 30, 40, 30, 40, 50];
   
+  pdf.setFontSize(8);
   pdf.setFont('helvetica', 'bold');
+  
+  let xPos = margin;
   headers.forEach((header, i) => {
     addRussianText(pdf, header, xPos, yPos);
     xPos += colWidths[i];
   });
-  yPos += lineHeight;
   
-  // Draw line under headers
+  yPos += lineHeight;
   pdf.line(margin, yPos - 2, pageWidth - margin, yPos - 2);
+  
   yPos += 2;
   
   pdf.setFont('helvetica', 'normal');
@@ -731,64 +702,61 @@ function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pa
 }
 
 function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight, lineHeight, maxContentHeight) {
-  // Check if we have enough space for graphics
-  const availableHeight = maxContentHeight - yPos;
-  const graphicsHeight = Math.min(100, availableHeight);
+  if (!layout) return yPos;
   
-  if (graphicsHeight < 50) {
+  // Check if we need a new page
+  if (yPos > maxContentHeight - 100) {
     pdf.addPage();
     yPos = 20;
   }
   
-  pdf.setFontSize(14);
+  pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
-  addRussianText(pdf, 'Схема раскладки', margin, yPos);
+  addRussianText(pdf, 'Схема раскладки:', margin, yPos);
   yPos += lineHeight * 1.5;
   
-  // Simplified layout representation
-  pdf.setDrawColor(0, 0, 0);
-  pdf.setLineWidth(0.5);
+  // Simple layout representation
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'normal');
   
-  const rectWidth = pageWidth - 2 * margin;
-  const rectHeight = 60;
+  const sheetWidth = layout.sheetWidth || 1250;
+  const sheetHeight = layout.sheetHeight || 2500;
+  const scale = Math.min(200 / sheetWidth, 150 / sheetHeight);
+  
+  const drawWidth = sheetWidth * scale;
+  const drawHeight = sheetHeight * scale;
+  const drawX = margin + 50;
+  const drawY = yPos;
   
   // Draw sheet outline
-  pdf.rect(margin, yPos, rectWidth, rectHeight);
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(1);
+  pdf.rect(drawX, drawY, drawWidth, drawHeight);
   
   // Add sheet info
-  pdf.setFontSize(8);
-  const sheetInfo = `Лист: ${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} мм`;
-  addRussianText(pdf, sheetInfo, margin + 5, yPos + 10);
-  
-  // Draw parts representation (simplified)
-  if (layout.sheets || layout.totalSheets) {
-    const sheetsCount = layout.totalSheets || layout.sheets || 1;
-    addRussianText(pdf, `Листов: ${sheetsCount}`, margin + 5, yPos + 20);
-    
-    if (layout.efficiency) {
-      addRussianText(pdf, `Эффективность: ${layout.efficiency.toFixed(1)}%`, margin + 5, yPos + 30);
-    }
+  addRussianText(pdf, `Лист ${layout.sheets || 1}: ${sheetWidth}x${sheetHeight} мм`, drawX + drawWidth + 10, drawY + 10);
+  if (layout.efficiency) {
+    addRussianText(pdf, `Эффективность: ${layout.efficiency.toFixed(1)}%`, drawX + drawWidth + 10, drawY + 25);
   }
   
-  return yPos + rectHeight + lineHeight * 2;
+  return yPos + drawHeight + 20;
 }
 
 function addFinalSummary(pdf, layout, files, margin, yPos, lineHeight, maxContentHeight) {
-  // Check if we need a new page for final summary
-  if (yPos > maxContentHeight - 80) {
+  // Check if we need a new page
+  if (yPos > maxContentHeight - 100) {
     pdf.addPage();
     yPos = 20;
   }
   
-  pdf.setFontSize(14);
+  pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
-  addRussianText(pdf, 'Итоговая сводка', margin, yPos);
+  addRussianText(pdf, 'Итоговая сводка:', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   
-  // Calculate totals
   let totalTime = 0;
   let totalCost = 0;
   let totalLength = 0;
@@ -801,50 +769,25 @@ function addFinalSummary(pdf, layout, files, margin, yPos, lineHeight, maxConten
         totalCost += file.calculatedCost.costForAllParts || 0;
       }
       if (file.parsed) {
-        totalLength += (file.parsed.totalLen || 0) * (file.quantity || 1);
-        totalPierces += (file.parsed.pierceCount || 0) * (file.quantity || 1);
+        totalLength += file.parsed.totalLen || 0;
+        totalPierces += file.parsed.pierceCount || 0;
       }
     });
   }
   
-  const finalData = [
-    ['Общее время работ:', `${totalTime.toFixed(2)} мин`],
-    ['Общая стоимость:', `${totalCost.toFixed(2)} ₽`],
+  const summaryData = [
+    ['Общее время работ:', `${totalTime.toFixed(1)} мин`],
+    ['Общая стоимость:', `${totalCost.toFixed(0)} ₽`],
     ['Общая длина реза:', `${totalLength.toFixed(3)} м`],
     ['Общее количество врезок:', String(totalPierces)],
-    ['Количество листов:', String(layout.totalSheets || layout.sheets || '—')]
+    ['Количество листов:', String(layout?.sheets || layout?.totalSheets || 1)]
   ];
   
-  finalData.forEach(([label, value]) => {
-    // Ensure we don't exceed page boundaries
-    if (yPos > maxContentHeight) {
-      pdf.addPage();
-      yPos = 20;
-      
-      // Add header again if we're on a new page
-      pdf.setFontSize(14);
-      pdf.setFont('helvetica', 'bold');
-      addRussianText(pdf, 'Итоговая сводка (продолжение)', margin, yPos);
-      yPos += lineHeight * 1.5;
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
-    }
-    
+  summaryData.forEach(([label, value]) => {
     addRussianText(pdf, label, margin, yPos);
     addRussianText(pdf, value, margin + 100, yPos);
     yPos += lineHeight;
   });
-}
-
-function getCurrentFile(state) {
-  return {
-    name: 'Текущий файл',
-    parsed: state.parsed,
-    settings: {
-      thickness: document.getElementById('th')?.value,
-      power: document.getElementById('power')?.value,
-      gas: document.getElementById('gas')?.value
-    },
-    calculatedCost: null
-  };
-}
+  
+  return yPos + lineHeight;
+} 
