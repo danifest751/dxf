@@ -226,11 +226,23 @@ export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
       throw new Error('Failed to set source on html2pdf worker');
     }
     
-    await workerWithSource.save();
-    console.log('PDF saved successfully');
-    
-    // Clean up
-    document.body.removeChild(tempContainer);
+    // Use the promise-based approach for better error handling
+    await new Promise((resolve, reject) => {
+      workerWithSource
+        .save()
+        .then(() => {
+          console.log('PDF saved successfully');
+          resolve();
+        })
+        .catch((error) => {
+          console.error('Error saving PDF:', error);
+          reject(new Error(`Ошибка сохранения PDF: ${error.message}`));
+        })
+        .finally(() => {
+          // Clean up
+          document.body.removeChild(tempContainer);
+        });
+    });
     
     console.log('PDF report generated successfully');
     
@@ -618,14 +630,25 @@ export async function generateSimplePDFReport(data, filename = 'dxf-pro-simple-r
       }
     };
     
-    // Generate PDF
-    await window.html2pdf()
-      .set(options)
-      .from(tempContainer)
-      .save();
-    
-    // Clean up
-    document.body.removeChild(tempContainer);
+    // Generate PDF using promise-based approach
+    await new Promise((resolve, reject) => {
+      window.html2pdf()
+        .set(options)
+        .from(tempContainer)
+        .save()
+        .then(() => {
+          console.log('Simple PDF saved successfully');
+          resolve();
+        })
+        .catch((error) => {
+          console.error('Error saving simple PDF:', error);
+          reject(new Error(`Ошибка сохранения простого PDF: ${error.message}`));
+        })
+        .finally(() => {
+          // Clean up
+          document.body.removeChild(tempContainer);
+        });
+    });
     
     console.log('Simple PDF report generated successfully');
     

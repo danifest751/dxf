@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Generation Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-container {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        button {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #005a87;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .status.ok {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.err {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.warn {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+    </style>
+</head>
+<body>
+    <h1>Тест генерации PDF</h1>
+    
+    <div class="test-container">
+        <h2>Тестовые данные</h2>
+        <p>Этот тест проверяет корректную работу генерации PDF с поддержкой кириллических символов.</p>
+        
+        <button id="testPdf">Сгенерировать тестовый PDF</button>
+        
+        <div id="status" class="status" style="display: none;"></div>
+    </div>
+
+    <script type="module">
+        import { generatePDFReport } from './pdf-export-html2pdf.js';
+        
+        const button = document.getElementById('testPdf');
+        const statusDiv = document.getElementById('status');
+        
+        function setStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+            statusDiv.style.display = 'block';
+        }
+        
+        button.addEventListener('click', async () => {
+            try {
+                // Disable button during processing
+                button.disabled = true;
+                button.textContent = 'Генерация PDF...';
+                setStatus('Генерация тестового PDF...', 'warn');
+                
+                // Create test data
+                const testData = {
+                    state: {
+                        tab: 'nest'
+                    },
+                    layout: {
+                        sheets: 2,
+                        totalSheets: 2,
+                        efficiency: 85.5,
+                        sheetWidth: 1250,
+                        sheetHeight: 2500
+                    },
+                    files: [
+                        {
+                            name: 'тестовый_файл_1.dxf',
+                            parsed: {
+                                totalLen: 15.75,
+                                pierceCount: 3,
+                                entities: [{}, {}, {}] // Mock entities
+                            },
+                            calculatedCost: {
+                                timeForAllParts: 12.5,
+                                costForAllParts: 1250
+                            }
+                        },
+                        {
+                            name: 'тестовый_файл_2.dxf',
+                            parsed: {
+                                totalLen: 8.3,
+                                pierceCount: 1,
+                                entities: [{}] // Mock entities
+                            },
+                            calculatedCost: {
+                                timeForAllParts: 6.2,
+                                costForAllParts: 620
+                            }
+                        }
+                    ]
+                };
+                
+                // Generate PDF
+                await generatePDFReport(testData, 'test-report.pdf');
+                setStatus('Тестовый PDF успешно создан!', 'ok');
+            } catch (error) {
+                console.error('Test PDF generation error:', error);
+                setStatus(`Ошибка: ${error.message}`, 'err');
+            } finally {
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = 'Сгенерировать тестовый PDF';
+            }
+        });
+    </script>
+</body>
+</html>

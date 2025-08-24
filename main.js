@@ -1807,6 +1807,11 @@ function initializeEventHandlers() {
       console.log('- Files count:', files.length);
       console.log('- Active file:', getActiveFile());
       
+      // Validate that we have files with data
+      if (files.length === 0) {
+        throw new Error('Нет файлов для создания отчета');
+      }
+      
       button.textContent = '📋 Генерация PDF...';
       setStatus('Генерация PDF отчета...', 'warn');
       
@@ -1817,6 +1822,12 @@ function initializeEventHandlers() {
       // Validate data before sending to PDF generator
       if (!reportData.layout && !reportData.files) {
         throw new Error('Нет данных для создания отчета');
+      }
+      
+      // Ensure we have at least one file with parsed data
+      const validFiles = reportData.files.filter(file => file && file.parsed);
+      if (validFiles.length === 0) {
+        throw new Error('Нет корректных данных для создания отчета');
       }
       
       await generatePDFReportWithHtml2PDF(reportData, 'dxf-pro-report.pdf');
