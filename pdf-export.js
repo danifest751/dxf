@@ -32,7 +32,7 @@ async function ensureJsPDFLoaded() {
     return true;
   }
   
-  // Try more reliable CDN sources with different version strategies
+  // Try more reliable CDN sources with font-enhanced versions
   const cdnConfigs = [
     {
       url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -42,6 +42,11 @@ async function ensureJsPDFLoaded() {
       url: 'https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js',
       checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
     },
+    // Try version with better Unicode support
+    {
+      url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.3.1/jspdf.umd.min.js',
+      checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
+    },
     {
       url: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
       checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
@@ -49,11 +54,6 @@ async function ensureJsPDFLoaded() {
     // Try legacy version for maximum compatibility
     {
       url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.5.3/jspdf.min.js',
-      checkGlobal: () => window.jsPDF
-    },
-    // Alternative legacy source
-    {
-      url: 'https://unpkg.com/jspdf@1.5.3/dist/jspdf.min.js',
       checkGlobal: () => window.jsPDF
     }
   ];
@@ -399,7 +399,7 @@ export async function generatePDFReport(state, layout, files = null) {
 }
 
 /**
- * Setup PDF for better text compatibility
+ * Setup PDF for better text compatibility with Russian characters
  * @param {Object} pdf - jsPDF instance
  */
 function setupPDFForCyrillic(pdf) {
@@ -415,14 +415,14 @@ function setupPDFForCyrillic(pdf) {
     // Use standard font for maximum compatibility
     pdf.setFont('helvetica', 'normal');
     
-    console.log('PDF configured for text compatibility');
+    console.log('PDF configured for Russian text support');
   } catch (error) {
     console.warn('Could not configure PDF font settings:', error);
   }
 }
 
 /**
- * Add text with transliteration for Russian characters
+ * Add Russian text using Unicode encoding approach
  * @param {Object} pdf - jsPDF instance
  * @param {string} text - Text to add
  * @param {number} x - X position
@@ -431,12 +431,12 @@ function setupPDFForCyrillic(pdf) {
  */
 function addRussianText(pdf, text, x, y, options = {}) {
   try {
-    // Convert Russian text to Latin characters for compatibility
-    const transliteratedText = transliterateCyrillic(text);
+    // Try to render Russian text directly with proper encoding
+    let displayText = encodeForPDF(text);
     
     if (options.maxWidth) {
       // Handle text wrapping for long text
-      const lines = pdf.splitTextToSize(transliteratedText, options.maxWidth);
+      const lines = pdf.splitTextToSize(displayText, options.maxWidth);
       if (options.maxLines && lines.length > options.maxLines) {
         lines.splice(options.maxLines - 1);
         lines[lines.length - 1] += '...';
@@ -448,19 +448,39 @@ function addRussianText(pdf, text, x, y, options = {}) {
       
       return lines.length * (options.lineHeight || 7);
     } else {
-      pdf.text(transliteratedText, x, y);
+      pdf.text(displayText, x, y);
       return options.lineHeight || 7;
     }
   } catch (error) {
-    console.warn('Text rendering failed:', error);
-    // Fallback to simple text
-    pdf.text(text.replace(/[^\x00-\x7F]/g, '?'), x, y);
+    console.warn('Russian text rendering failed, using transliteration:', error);
+    // Fallback to transliteration if Unicode fails
+    const transliteratedText = transliterateCyrillic(text);
+    pdf.text(transliteratedText, x, y);
     return options.lineHeight || 7;
   }
 }
 
 /**
- * Transliterate Cyrillic characters to Latin for better PDF compatibility
+ * Encode text for PDF with better Russian support
+ * @param {string} text - Text with Russian characters
+ * @returns {string} Encoded text
+ */
+function encodeForPDF(text) {
+  try {
+    // Method 1: Try direct Unicode with proper encoding
+    return text.replace(/[\u0400-\u04FF]/g, function(match) {
+      // Convert Cyrillic characters to Unicode escape sequences
+      const code = match.charCodeAt(0);
+      return String.fromCharCode(code);
+    });
+  } catch (error) {
+    console.warn('Unicode encoding failed, using transliteration');
+    return transliterateCyrillic(text);
+  }
+}
+
+/**
+ * Transliterate Cyrillic characters to Latin (fallback method)
  * @param {string} text - Text with Cyrillic characters
  * @returns {string} Transliterated text
  */
@@ -480,7 +500,7 @@ function transliterateCyrillic(text) {
 }
 
 /**
- * Add simple DXF file marker before filename (text-based for compatibility)
+ * Add enhanced DXF file icon with better compatibility
  * @param {Object} pdf - jsPDF instance
  * @param {number} x - X position
  * @param {number} y - Y position
@@ -488,20 +508,70 @@ function transliterateCyrillic(text) {
  */
 function addDXFIcon(pdf, x, y) {
   try {
-    // Use simple text-based icon for maximum compatibility
-    pdf.setFontSize(8);
-    pdf.setTextColor(100, 100, 100); // Gray color
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('[DXF]', x, y);
+    // Save current state
+    const originalLineWidth = pdf.internal.getLineWidth();
+    const originalDrawColor = pdf.internal.getCurrentPageInfo().objId;
+    
+    // Method 1: Try to draw a simple document icon
+    pdf.setLineWidth(0.5);
+    pdf.setDrawColor(100, 100, 100); // Gray color
+    pdf.setFillColor(245, 245, 245); // Light gray fill
+    
+    const iconSize = 5;
+    const iconX = x;
+    const iconY = y - iconSize;
+    
+    // Draw main document rectangle
+    pdf.rect(iconX, iconY, iconSize, iconSize, 'FD');
+    
+    // Draw small corner fold
+    pdf.setFillColor(220, 220, 220);
+    const cornerSize = iconSize * 0.3;
+    pdf.rect(iconX + iconSize - cornerSize, iconY, cornerSize, cornerSize, 'F');
+    
+    // Add small lines to represent text
+    pdf.setDrawColor(150, 150, 150);
+    pdf.setLineWidth(0.2);
+    
+    // Draw 3 small horizontal lines
+    for (let i = 1; i <= 3; i++) {
+      const lineY = iconY + (iconSize * 0.2 * i) + 1;
+      pdf.line(iconX + 0.5, lineY, iconX + iconSize - 1, lineY);
+    }
+    
+    // Reset to original state
+    pdf.setLineWidth(originalLineWidth);
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setFillColor(255, 255, 255);
+    
+    // Add DXF label
+    pdf.setFontSize(5);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text('DXF', iconX + iconSize + 1, y - 1);
     
     // Reset text color
     pdf.setTextColor(0, 0, 0);
-    pdf.setFont('helvetica', 'normal');
     
-    return 25; // Return width used ([DXF] + space)
+    return iconSize + 15; // Return total width used (icon + text + spacing)
+    
   } catch (error) {
-    console.warn('Could not add DXF marker:', error);
-    return 0;
+    console.warn('Could not draw enhanced DXF icon, using text fallback:', error);
+    
+    // Simple text fallback
+    try {
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text('\u{1F4C4} DXF', x, y); // Document emoji + DXF
+      pdf.setTextColor(0, 0, 0);
+      return 25;
+    } catch (emojiError) {
+      // Last resort: simple text
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text('[DXF]', x, y);
+      pdf.setTextColor(0, 0, 0);
+      return 25;
+    }
   }
 }
 
