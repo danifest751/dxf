@@ -603,4 +603,4 @@ function createSimpleReportHTML(data) {
 
 // Export utility functions for backward compatibility
 export { ensureHtml2PDFLoaded as ensureJsPDFLoaded };
-export { generatePDFReport as generatePDFReport }; 
+export { generateSimplePDFReport }; 
