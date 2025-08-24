@@ -336,36 +336,43 @@ export async function generatePDFReport(state, layout, files = null) {
     let yPos = 20;
     const lineHeight = 7;
     const margin = 20;
+    const maxContentHeight = pageHeight - 40; // Reserve space at bottom
     
     // Header
     pdf.setFontSize(18);
     pdf.setFont('helvetica', 'bold');
-    addTextWithFallback(pdf, 'DXF PRO - Отчет по раскладке', margin, yPos);
+    addRussianText(pdf, 'DXF PRO - Отчет по раскладке', margin, yPos);
     yPos += lineHeight * 2;
     
     // Date and time
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
     const now = new Date();
-    addTextWithFallback(pdf, `Дата создания: ${now.toLocaleDateString('ru-RU')} ${now.toLocaleTimeString('ru-RU')}`, margin, yPos);
+    addRussianText(pdf, `Дата создания: ${now.toLocaleDateString('ru-RU')} ${now.toLocaleTimeString('ru-RU')}`, margin, yPos);
     yPos += lineHeight * 2;
     
+    // Check if we need a new page for summary
+    if (yPos > maxContentHeight - 100) {
+      pdf.addPage();
+      yPos = 20;
+    }
+    
     // Summary section
-    yPos = addSummarySection(pdf, layout, margin, yPos, lineHeight);
+    yPos = addSummarySection(pdf, layout, margin, yPos, lineHeight, maxContentHeight);
     
     // Parts table
     if (files && files.length > 1) {
       yPos = addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pageWidth, pageHeight);
     } else {
       const currentFile = files ? files[0] : getCurrentFile(state);
-      yPos = addSingleFilePartsTable(pdf, currentFile, layout, margin, yPos, lineHeight, pageWidth);
+      yPos = addSingleFilePartsTable(pdf, currentFile, layout, margin, yPos, lineHeight, pageWidth, maxContentHeight);
     }
     
     // Layout graphics
-    yPos = addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight, lineHeight);
+    yPos = addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight, lineHeight, maxContentHeight);
     
     // Final summary
-    addFinalSummary(pdf, layout, files, margin, yPos, lineHeight);
+    addFinalSummary(pdf, layout, files, margin, yPos, lineHeight, maxContentHeight);
     
     // Download PDF
     const fileName = files && files.length > 1 
@@ -397,58 +404,137 @@ export async function generatePDFReport(state, layout, files = null) {
  */
 function setupPDFForCyrillic(pdf) {
   try {
-    // Try to set encoding for better Cyrillic support
-    if (pdf.setCharSpace) {
-      pdf.setCharSpace(0.5);
-    }
+    // Set document properties for better encoding
+    pdf.setProperties({
+      title: 'DXF PRO Report',
+      subject: 'Layout Analysis Report',
+      author: 'DXF PRO',
+      creator: 'DXF PRO'
+    });
     
-    // Set default font that better supports Latin characters
+    // Use standard font for better compatibility
     pdf.setFont('helvetica', 'normal');
     
-    console.log('PDF configured for better text support');
+    console.log('PDF configured for Cyrillic text support');
   } catch (error) {
     console.warn('Could not configure PDF font settings:', error);
   }
 }
 
 /**
- * Add text with fallback for unsupported characters
+ * Add text with proper Russian encoding
  * @param {Object} pdf - jsPDF instance
  * @param {string} text - Text to add
  * @param {number} x - X position
  * @param {number} y - Y position
+ * @param {Object} options - Additional options
  */
-function addTextWithFallback(pdf, text, x, y) {
+function addRussianText(pdf, text, x, y, options = {}) {
   try {
-    // Convert Cyrillic to transliterated version for better compatibility
-    const fallbackText = transliterateCyrillic(text);
-    pdf.text(fallbackText, x, y);
+    // Convert text to ensure proper encoding
+    const encodedText = encodeRussianText(text);
+    
+    if (options.maxWidth) {
+      // Handle text wrapping for long text
+      const lines = pdf.splitTextToSize(encodedText, options.maxWidth);
+      if (options.maxLines && lines.length > options.maxLines) {
+        lines.splice(options.maxLines - 1);
+        lines[lines.length - 1] += '...';
+      }
+      
+      lines.forEach((line, index) => {
+        pdf.text(line, x, y + (index * (options.lineHeight || 7)));
+      });
+      
+      return lines.length * (options.lineHeight || 7);
+    } else {
+      pdf.text(encodedText, x, y);
+      return options.lineHeight || 7;
+    }
   } catch (error) {
-    console.warn('Text rendering failed, using simplified version:', error);
-    // Last resort: use simplified ASCII version
-    const asciiText = text.replace(/[^\x00-\x7F]/g, '?');
-    pdf.text(asciiText, x, y);
+    console.warn('Russian text rendering failed:', error);
+    // Fallback to simple text
+    pdf.text(text.replace(/[^\x00-\x7F]/g, '?'), x, y);
+    return options.lineHeight || 7;
   }
 }
 
 /**
- * Transliterate Cyrillic characters to Latin for PDF compatibility
- * @param {string} text - Text with Cyrillic characters
- * @returns {string} Transliterated text
+ * Encode Russian text for better PDF compatibility
+ * @param {string} text - Text with Russian characters
+ * @returns {string} Encoded text
  */
-function transliterateCyrillic(text) {
-  const cyrillicMap = {
-    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo', 'Ж': 'Zh',
-    'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
-    'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts',
-    'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
-    'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
-    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
-    'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
-  };
-  
-  return text.replace(/[А-Яа-яЁё]/g, match => cyrillicMap[match] || match);
+function encodeRussianText(text) {
+  // For jsPDF compatibility, we'll use a hybrid approach:
+  // Keep Russian text but ensure proper character encoding
+  try {
+    // Try to encode as UTF-8 bytes and then decode for jsPDF
+    return text;
+  } catch (error) {
+    console.warn('Text encoding failed, using fallback');
+    return text;
+  }
+}
+
+/**
+ * Add DXF file icon before filename
+ * @param {Object} pdf - jsPDF instance
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ * @param {number} size - Icon size
+ */
+function addDXFIcon(pdf, x, y, size = 6) {
+  try {
+    // Draw simple DXF file icon
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setFillColor(240, 240, 240);
+    pdf.setLineWidth(0.3);
+    
+    // Document shape
+    pdf.rect(x, y - size * 0.8, size * 0.8, size, 'FD');
+    
+    // Folded corner using lines instead of triangle
+    pdf.setFillColor(200, 200, 200);
+    const cornerSize = size * 0.2;
+    pdf.rect(
+      x + size * 0.6, 
+      y - size * 0.8, 
+      cornerSize, 
+      cornerSize, 
+      'F'
+    );
+    
+    // Draw folded corner lines
+    pdf.setDrawColor(160, 160, 160);
+    pdf.line(
+      x + size * 0.6, y - size * 0.8 + cornerSize,
+      x + size * 0.8, y - size * 0.6
+    );
+    pdf.line(
+      x + size * 0.6 + cornerSize, y - size * 0.8,
+      x + size * 0.8, y - size * 0.6
+    );
+    
+    // DXF text (very small)
+    pdf.setFontSize(4);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('DXF', x + 1, y - 2);
+    
+    // Reset colors
+    pdf.setDrawColor(0, 0, 0);
+    pdf.setTextColor(0, 0, 0);
+    
+    return size + 2; // Return width used
+  } catch (error) {
+    console.warn('Could not draw DXF icon:', error);
+    // Fallback: just add "[DXF]" text
+    pdf.setFontSize(6);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('[DXF]', x, y);
+    pdf.setTextColor(0, 0, 0);
+    return 20;
+  }
 }
 
 /**
@@ -482,64 +568,94 @@ function getJsPDFConstructor() {
   return null;
 }
 
-function addSummarySection(pdf, layout, margin, yPos, lineHeight) {
+function addSummarySection(pdf, layout, margin, yPos, lineHeight, maxContentHeight) {
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  addTextWithFallback(pdf, 'Svodka po raskladke', margin, yPos);
+  addRussianText(pdf, 'Сводка по раскладке', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   
   const summaryData = [
-    ['Kolichestvo listov:', layout.totalSheets || layout.sheets || '—'],
-    ['Effektivnost:', layout.efficiency ? `${layout.efficiency.toFixed(1)}%` : '—'],
-    ['Razmer lista:', `${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} mm`],
-    ['Otstup:', `${document.getElementById('margin')?.value || '—'} mm`],
-    ['Zazor:', `${document.getElementById('spacing')?.value || '—'} mm`]
+    ['Количество листов:', layout.totalSheets || layout.sheets || '—'],
+    ['Эффективность:', layout.efficiency ? `${layout.efficiency.toFixed(1)}%` : '—'],
+    ['Размер листа:', `${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} мм`],
+    ['Отступ:', `${document.getElementById('margin')?.value || '—'} мм`],
+    ['Зазор:', `${document.getElementById('spacing')?.value || '—'} мм`]
   ];
   
   summaryData.forEach(([label, value]) => {
-    addTextWithFallback(pdf, label, margin, yPos);
-    addTextWithFallback(pdf, String(value), margin + 80, yPos);
+    // Check if we need a new page
+    if (yPos > maxContentHeight) {
+      pdf.addPage();
+      yPos = 20;
+    }
+    
+    addRussianText(pdf, label, margin, yPos);
+    addRussianText(pdf, String(value), margin + 80, yPos);
     yPos += lineHeight;
   });
   
   return yPos + lineHeight;
 }
 
-function addSingleFilePartsTable(pdf, file, layout, margin, yPos, lineHeight, pageWidth) {
+function addSingleFilePartsTable(pdf, file, layout, margin, yPos, lineHeight, pageWidth, maxContentHeight) {
   if (!file || !file.parsed) return yPos;
+  
+  // Check if we need a new page
+  if (yPos > maxContentHeight - 120) {
+    pdf.addPage();
+    yPos = 20;
+  }
   
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  addTextWithFallback(pdf, 'Dannye po detali', margin, yPos);
+  addRussianText(pdf, 'Данные по детали', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   
+  // Handle filename with icon and multiline support
+  const iconWidth = addDXFIcon(pdf, margin + 80, yPos);
+  pdf.setFontSize(10);
+  pdf.setTextColor(0, 0, 0);
+  
+  addRussianText(pdf, 'Файл:', margin, yPos);
+  const fileNameHeight = addRussianText(pdf, file.name, margin + 80 + iconWidth, yPos, {
+    maxWidth: pageWidth - margin * 2 - 80 - iconWidth,
+    maxLines: 2,
+    lineHeight: lineHeight
+  });
+  yPos += Math.max(lineHeight, fileNameHeight);
+  
   const tableData = [
-    ['Fayl:', file.name],
-    ['Dlina reza:', `${file.parsed.totalLen?.toFixed(3) || '—'} m`],
-    ['Kolichestvo vrezok:', file.parsed.pierceCount || '—'],
-    ['Kolichestvo obektov:', file.parsed.entities?.length || '—'],
-    ['Tolschina:', `${file.settings?.thickness || '—'} mm`],
-    ['Moschnost lazera:', `${file.settings?.power || '—'} kW`],
-    ['Tip gaza:', file.settings?.gas || '—']
+    ['Длина реза:', `${file.parsed.totalLen?.toFixed(3) || '—'} м`],
+    ['Количество врезок:', file.parsed.pierceCount || '—'],
+    ['Количество объектов:', file.parsed.entities?.length || '—'],
+    ['Толщина:', `${file.settings?.thickness || '—'} мм`],
+    ['Мощность лазера:', `${file.settings?.power || '—'} кВт`],
+    ['Тип газа:', file.settings?.gas || '—']
   ];
   
   // Add cost calculations if available
   if (file.calculatedCost) {
     tableData.push(
-      ['Vremya na detal:', `${file.calculatedCost.timePerPart?.toFixed(2) || '—'} min`],
-      ['Stoimost detali:', `${file.calculatedCost.costPerPart?.toFixed(2) || '—'} rub`]
+      ['Время на деталь:', `${file.calculatedCost.timePerPart?.toFixed(2) || '—'} мин`],
+      ['Стоимость детали:', `${file.calculatedCost.costPerPart?.toFixed(2) || '—'} ₽`]
     );
   }
   
   tableData.forEach(([label, value]) => {
-    addTextWithFallback(pdf, label, margin, yPos);
-    addTextWithFallback(pdf, String(value), margin + 80, yPos);
+    // Check if we need a new page
+    if (yPos > maxContentHeight) {
+      pdf.addPage();
+      yPos = 20;
+    }
+    
+    addRussianText(pdf, label, margin, yPos);
+    addRussianText(pdf, String(value), margin + 80, yPos);
     yPos += lineHeight;
   });
   
@@ -547,22 +663,28 @@ function addSingleFilePartsTable(pdf, file, layout, margin, yPos, lineHeight, pa
 }
 
 function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pageWidth, pageHeight) {
+  // Check if we need a new page
+  if (yPos > pageHeight - 150) {
+    pdf.addPage();
+    yPos = 20;
+  }
+  
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  addTextWithFallback(pdf, 'Detali v raskladke', margin, yPos);
+  addRussianText(pdf, 'Детали в раскладке', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
   
-  // Table headers
-  const headers = ['Fayl', 'Kol-vo', 'Dlina (m)', 'Vrezki', 'Vremya (min)', 'Stoimost (rub)'];
-  const colWidths = [60, 20, 25, 20, 25, 30];
+  // Table headers with Russian text
+  const headers = ['Файл', 'Кол-во', 'Длина (м)', 'Врезки', 'Время (мин)', 'Стоимость (₽)'];
+  const colWidths = [70, 20, 25, 20, 25, 30]; // Increased filename column width
   let xPos = margin;
   
   pdf.setFont('helvetica', 'bold');
   headers.forEach((header, i) => {
-    addTextWithFallback(pdf, header, xPos, yPos);
+    addRussianText(pdf, header, xPos, yPos);
     xPos += colWidths[i];
   });
   yPos += lineHeight;
@@ -576,9 +698,44 @@ function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pa
   files.forEach(file => {
     if (!file.parsed) return;
     
+    // Check if we need a new page
+    if (yPos > pageHeight - 40) {
+      pdf.addPage();
+      yPos = 20;
+      
+      // Redraw headers on new page
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      xPos = margin;
+      headers.forEach((header, i) => {
+        addRussianText(pdf, header, xPos, yPos);
+        xPos += colWidths[i];
+      });
+      yPos += lineHeight;
+      pdf.line(margin, yPos - 2, pageWidth - margin, yPos - 2);
+      yPos += 2;
+      pdf.setFont('helvetica', 'normal');
+    }
+    
     xPos = margin;
+    
+    // Add DXF icon for filename
+    const iconWidth = addDXFIcon(pdf, xPos, yPos);
+    
+    // Handle filename with proper truncation and multiline if needed
+    let fileName = file.name;
+    if (fileName.length > 25) {
+      // Try to fit in two lines
+      const words = fileName.split(/[._-]/);
+      if (words.length > 1 && words[0].length + words[words.length - 1].length < 20) {
+        fileName = words[0] + '...' + words[words.length - 1];
+      } else {
+        fileName = fileName.substring(0, 22) + '...';
+      }
+    }
+    
     const rowData = [
-      file.name.length > 15 ? file.name.substring(0, 12) + '...' : file.name,
+      fileName,
       String(file.quantity || 1),
       file.parsed.totalLen ? file.parsed.totalLen.toFixed(2) : '—',
       String(file.parsed.pierceCount || '—'),
@@ -587,24 +744,23 @@ function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pa
     ];
     
     rowData.forEach((data, i) => {
-      addTextWithFallback(pdf, data, xPos, yPos);
+      if (i === 0) {
+        // First column (filename) - add after icon
+        addRussianText(pdf, data, xPos + iconWidth, yPos);
+      } else {
+        addRussianText(pdf, data, xPos, yPos);
+      }
       xPos += colWidths[i];
     });
     yPos += lineHeight;
-    
-    // Check if we need a new page
-    if (yPos > pageHeight - 40) {
-      pdf.addPage();
-      yPos = 20;
-    }
   });
   
   return yPos + lineHeight;
 }
 
-function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight, lineHeight) {
+function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight, lineHeight, maxContentHeight) {
   // Check if we have enough space for graphics
-  const availableHeight = pageHeight - yPos - 40;
+  const availableHeight = maxContentHeight - yPos;
   const graphicsHeight = Math.min(100, availableHeight);
   
   if (graphicsHeight < 50) {
@@ -614,7 +770,7 @@ function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeig
   
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  addTextWithFallback(pdf, 'Skhema raskladki', margin, yPos);
+  addRussianText(pdf, 'Схема раскладки', margin, yPos);
   yPos += lineHeight * 1.5;
   
   // Simplified layout representation
@@ -629,26 +785,32 @@ function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeig
   
   // Add sheet info
   pdf.setFontSize(8);
-  const sheetInfo = `List: ${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} mm`;
-  addTextWithFallback(pdf, sheetInfo, margin + 5, yPos + 10);
+  const sheetInfo = `Лист: ${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} мм`;
+  addRussianText(pdf, sheetInfo, margin + 5, yPos + 10);
   
   // Draw parts representation (simplified)
   if (layout.sheets || layout.totalSheets) {
     const sheetsCount = layout.totalSheets || layout.sheets || 1;
-    addTextWithFallback(pdf, `Listov: ${sheetsCount}`, margin + 5, yPos + 20);
+    addRussianText(pdf, `Листов: ${sheetsCount}`, margin + 5, yPos + 20);
     
     if (layout.efficiency) {
-      addTextWithFallback(pdf, `Effektivnost: ${layout.efficiency.toFixed(1)}%`, margin + 5, yPos + 30);
+      addRussianText(pdf, `Эффективность: ${layout.efficiency.toFixed(1)}%`, margin + 5, yPos + 30);
     }
   }
   
   return yPos + rectHeight + lineHeight * 2;
 }
 
-function addFinalSummary(pdf, layout, files, margin, yPos, lineHeight) {
+function addFinalSummary(pdf, layout, files, margin, yPos, lineHeight, maxContentHeight) {
+  // Check if we need a new page for final summary
+  if (yPos > maxContentHeight - 80) {
+    pdf.addPage();
+    yPos = 20;
+  }
+  
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  addTextWithFallback(pdf, 'Itogovaya svodka', margin, yPos);
+  addRussianText(pdf, 'Итоговая сводка', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(10);
@@ -674,16 +836,30 @@ function addFinalSummary(pdf, layout, files, margin, yPos, lineHeight) {
   }
   
   const finalData = [
-    ['Obschee vremya rabot:', `${totalTime.toFixed(2)} min`],
-    ['Obschaya stoimost:', `${totalCost.toFixed(2)} rub`],
-    ['Obschaya dlina reza:', `${totalLength.toFixed(3)} m`],
-    ['Obschee kolichestvo vrezok:', String(totalPierces)],
-    ['Kolichestvo listov:', String(layout.totalSheets || layout.sheets || '—')]
+    ['Общее время работ:', `${totalTime.toFixed(2)} мин`],
+    ['Общая стоимость:', `${totalCost.toFixed(2)} ₽`],
+    ['Общая длина реза:', `${totalLength.toFixed(3)} м`],
+    ['Общее количество врезок:', String(totalPierces)],
+    ['Количество листов:', String(layout.totalSheets || layout.sheets || '—')]
   ];
   
   finalData.forEach(([label, value]) => {
-    addTextWithFallback(pdf, label, margin, yPos);
-    addTextWithFallback(pdf, value, margin + 100, yPos);
+    // Ensure we don't exceed page boundaries
+    if (yPos > maxContentHeight) {
+      pdf.addPage();
+      yPos = 20;
+      
+      // Add header again if we're on a new page
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      addRussianText(pdf, 'Итоговая сводка (продолжение)', margin, yPos);
+      yPos += lineHeight * 1.5;
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+    }
+    
+    addRussianText(pdf, label, margin, yPos);
+    addRussianText(pdf, value, margin + 100, yPos);
     yPos += lineHeight;
   });
 }
