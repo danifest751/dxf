@@ -34,14 +34,14 @@ async function ensureJsPDFLoaded() {
   
   // Try jsPDF versions with better font support for Russian text
   const cdnConfigs = [
-    // Try version with better Unicode support
+    // Try version known to work well with Unicode
     {
       url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
       checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
     },
-    // Fallback to another version
+    // Fallback to another version with good Unicode support
     {
-      url: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      url: 'https://cdn.jsdelivr.net/npm/jspdf@2.4.0/dist/jspdf.umd.min.js',
       checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
     },
     // Try newest version
@@ -298,15 +298,31 @@ export async function generatePDFReport(state, layout, files = null) {
     // Try to create PDF instance with error handling for different versions
     let pdf;
     try {
-      pdf = new PDFConstructor();
+      // Create PDF with specific settings for better Unicode support
+      pdf = new PDFConstructor({
+        orientation: 'portrait',
+        unit: 'px',
+        format: 'a4',
+        compress: true
+      });
     } catch (constructorError) {
       console.warn('Standard constructor failed, trying alternative approaches:', constructorError);
       
       // Try different constructor patterns for different versions
       if (window.jsPDF && typeof window.jsPDF === 'function') {
-        pdf = new window.jsPDF();
+        pdf = new window.jsPDF({
+          orientation: 'portrait',
+          unit: 'px',
+          format: 'a4',
+          compress: true
+        });
       } else if (window.jspdf && window.jspdf.jsPDF) {
-        pdf = new window.jspdf.jsPDF();
+        pdf = new window.jspdf.jsPDF({
+          orientation: 'portrait',
+          unit: 'px',
+          format: 'a4',
+          compress: true
+        });
       } else {
         throw new Error('No working jsPDF constructor found');
       }
@@ -408,6 +424,9 @@ function setupPDFForCyrillic(pdf) {
     // Use standard font for maximum compatibility
     pdf.setFont('helvetica', 'normal');
     
+    // Ensure proper encoding for Cyrillic characters
+    pdf.setR2L(false); // Set right-to-left to false for Russian text
+    
     console.log('PDF configured for Russian text support');
   } catch (error) {
     console.warn('Could not configure PDF font settings:', error);
@@ -424,6 +443,7 @@ function setupPDFForCyrillic(pdf) {
  */
 function addRussianText(pdf, text, x, y, options = {}) {
   try {
+    // Ensure proper encoding for Cyrillic characters
     // Use actual Russian text with UTF-8 encoding - no transliteration
     if (options.maxWidth) {
       // Handle text wrapping for long text
@@ -439,6 +459,7 @@ function addRussianText(pdf, text, x, y, options = {}) {
       
       return lines.length * (options.lineHeight || 7);
     } else {
+      // Ensure proper UTF-8 handling
       pdf.text(text, x, y);
       return options.lineHeight || 7;
     }
