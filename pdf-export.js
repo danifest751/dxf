@@ -284,7 +284,7 @@ export async function generatePDFReport(state, layout, files = null) {
     debugJsPDFAvailability();
     
     // Ensure jsPDF is loaded
-    await ensureJsPDFAvailable();
+    await ensureJsPDFLoaded();
     
     // Get jsPDF constructor with improved detection
     const PDFConstructor = getJsPDFConstructor();
