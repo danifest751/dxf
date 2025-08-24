@@ -3,6 +3,107 @@
  * Generates detailed reports with calculation data, part tables, and layout graphics
  */
 
+// Global variable to track if jsPDF is loaded
+let jsPDFLoaded = false;
+let jsPDFScript = null;
+
+/**
+ * Preloads jsPDF library for better performance (optional)
+ * Call this during application initialization
+ * @returns {Promise<boolean>} True if loaded successfully
+ */
+export async function preloadJsPDF() {
+  try {
+    await ensureJsPDFLoaded();
+    console.log('jsPDF preloaded successfully');
+    return true;
+  } catch (error) {
+    console.warn('jsPDF preload failed:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Ensures jsPDF library is loaded
+ * @returns {Promise<boolean>} True if loaded successfully
+ */
+async function ensureJsPDFLoaded() {
+  if (jsPDFLoaded && window.jsPDF) {
+    return true;
+  }
+  
+  // List of CDN URLs to try
+  const cdnUrls = [
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+    'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'
+  ];
+  
+  for (const url of cdnUrls) {
+    try {
+      await loadJsPDFFromUrl(url);
+      if (window.jsPDF) {
+        jsPDFLoaded = true;
+        return true;
+      }
+    } catch (error) {
+      console.warn(`Failed to load jsPDF from ${url}:`, error.message);
+      continue;
+    }
+  }
+  
+  throw new Error('Не удалось загрузить библиотеку jsPDF ни с одного из CDN');
+}
+
+/**
+ * Loads jsPDF from a specific URL
+ * @param {string} url - CDN URL to load from
+ * @returns {Promise<void>}
+ */
+function loadJsPDFFromUrl(url) {
+  return new Promise((resolve, reject) => {
+    // Check if already exists
+    if (window.jsPDF) {
+      resolve();
+      return;
+    }
+    
+    // Remove existing script if any
+    if (jsPDFScript) {
+      document.head.removeChild(jsPDFScript);
+    }
+    
+    // Create new script
+    jsPDFScript = document.createElement('script');
+    jsPDFScript.src = url;
+    jsPDFScript.crossOrigin = 'anonymous';
+    
+    // Set timeout for loading
+    const timeout = setTimeout(() => {
+      reject(new Error('Loading timeout'));
+    }, 10000);
+    
+    jsPDFScript.onload = () => {
+      clearTimeout(timeout);
+      // Wait a bit for the library to initialize
+      setTimeout(() => {
+        if (window.jsPDF) {
+          resolve();
+        } else {
+          reject(new Error('jsPDF не смог инициализироваться'));
+        }
+      }, 300);
+    };
+    
+    jsPDFScript.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error('Ошибка загрузки скрипта'));
+    };
+    
+    document.head.appendChild(jsPDFScript);
+  });
+}
+
 /**
  * Generates PDF report with calculation data and layout
  * @param {Object} state - Application state
@@ -11,10 +112,14 @@
  */
 export async function generatePDFReport(state, layout, files = null) {
   try {
-    // Dynamically import jsPDF
-    const { jsPDF } = await import('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    // Ensure jsPDF is loaded
+    await ensureJsPDFLoaded();
     
-    const pdf = new jsPDF();
+    if (!window.jsPDF) {
+      throw new Error('jsPDF library not available');
+    }
+    
+    const pdf = new window.jsPDF();
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     

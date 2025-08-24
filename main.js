@@ -7,7 +7,7 @@ import { createAnnotatedDXF, createDXFWithMarkers, createSVG, createCSV, downloa
 import { makeRunTests } from './tests.js';
 import { loadConfig, applyConfigToForm, getConfig, loadConfigFromStorage } from './config-loader.js';
 import { perfMonitor, measurePerformance } from './performance.js';
-import { generatePDFReport } from './pdf-export.js';
+import { generatePDFReport, preloadJsPDF } from './pdf-export.js';
 import { exportLayoutAsJPEG } from './jpeg-export.js';
 
 // Multi-file project state
@@ -1343,6 +1343,13 @@ async function initializeApp() {
     initCanvasInteractions(state, cv, safeDraw);
     initializeEventHandlers();
     
+    // Preload jsPDF library for better PDF export performance (non-blocking)
+    preloadJsPDF().then(() => {
+      console.log('jsPDF preloaded for better PDF export performance');
+    }).catch(() => {
+      console.log('jsPDF preload failed, will load on demand');
+    });
+    
     // Initialize button states
     const calcBtn = $('calc');
     const nestBtn = $('nest');
@@ -1768,6 +1775,9 @@ function initializeEventHandlers() {
   });
   
   on($('dlPDF'),'click', async () => {
+    const button = $('dlPDF');
+    const originalText = button.textContent;
+    
     try {
       const layout = state.combinedNesting || state.nesting;
       if (!layout) {
@@ -1775,17 +1785,35 @@ function initializeEventHandlers() {
         return;
       }
       
-      setStatus('Генерация PDF отчета...', 'warn');
+      // Disable button and show loading state
+      button.disabled = true;
+      button.textContent = '🔄 Загрузка библиотеки...';
+      setStatus('Подготовка создания PDF отчета...', 'warn');
       
       const files = state.combinedNesting 
         ? projectState.files.filter(f => f.includeInLayout && f.parsed)
         : [getActiveFile()];
       
+      button.textContent = '📋 Генерация PDF...';
+      setStatus('Генерация PDF отчета...', 'warn');
+      
       await generatePDFReport(state, layout, files);
-      setStatus('PDF отчет создан', 'ok');
+      setStatus('PDF отчет успешно создан и скачан', 'ok');
     } catch (error) {
       console.error('PDF export error:', error);
-      setStatus(`Ошибка экспорта PDF: ${error.message}`, 'err');
+      let errorMessage = 'Ошибка экспорта PDF';
+      
+      if (error.message.includes('jsPDF')) {
+        errorMessage += ': Проблема с загрузкой библиотеки. Проверьте интернет-соединение.';
+      } else {
+        errorMessage += `: ${error.message}`;
+      }
+      
+      setStatus(errorMessage, 'err');
+    } finally {
+      // Restore button state
+      button.disabled = false;
+      button.textContent = originalText;
     }
   });
   
