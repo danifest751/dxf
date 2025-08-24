@@ -359,7 +359,7 @@ export async function generatePDFReport(state, layout, files = null) {
     }
     
     // Layout graphics
-    yPos = addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight);
+    yPos = addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight, lineHeight);
     
     // Final summary
     addFinalSummary(pdf, layout, files, margin, yPos, lineHeight);
@@ -539,7 +539,7 @@ function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pa
   return yPos + lineHeight;
 }
 
-function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight) {
+function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeight, lineHeight) {
   // Check if we have enough space for graphics
   const availableHeight = pageHeight - yPos - 40;
   const graphicsHeight = Math.min(100, availableHeight);
