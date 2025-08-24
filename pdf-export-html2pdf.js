@@ -78,7 +78,8 @@ async function ensureHtml2PDFLoaded() {
  */
 function isHtml2PDFAvailable() {
   try {
-    return window.html2pdf && typeof window.html2pdf === 'function';
+    // Check if html2pdf is available and has the required methods
+    return window.html2pdf && typeof window.html2pdf === 'function' && window.html2pdf().set;
   } catch (error) {
     console.warn('Error checking html2pdf.js availability:', error);
     return false;
@@ -128,13 +129,29 @@ function loadHtml2PDFFromUrl(url, checkGlobal) {
 export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
   try {
     console.log('Generating PDF report with html2pdf.js...');
+    console.log('Report data:', data);
     
     if (!isHtml2PDFAvailable()) {
+      console.log('html2pdf not available, loading...');
       await ensureHtml2PDFLoaded();
     }
     
+    // Verify data structure
+    if (!data) {
+      throw new Error('No data provided for PDF generation');
+    }
+    
+    const { state, layout, files } = data;
+    console.log('Data structure - state:', !!state, 'layout:', !!layout, 'files:', !!files);
+    
     // Create HTML content for the report
     const htmlContent = createReportHTML(data);
+    console.log('HTML content created, length:', htmlContent.length);
+    
+    // Validate HTML content
+    if (!htmlContent || htmlContent.length < 100) {
+      console.warn('HTML content seems empty or incomplete');
+    }
     
     // Create temporary container
     const tempContainer = document.createElement('div');
@@ -150,6 +167,13 @@ export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
     
     document.body.appendChild(tempContainer);
     
+    // Log container content for debugging
+    console.log('Container content length:', tempContainer.innerHTML.length);
+    console.log('Container first 200 chars:', tempContainer.innerHTML.substring(0, 200));
+    
+    // Wait a bit for content to render
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Configure html2pdf options
     const options = {
       margin: [10, 10, 10, 10],
@@ -158,7 +182,18 @@ export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
       html2canvas: { 
         scale: 2,
         useCORS: true,
-        allowTaint: true
+        allowTaint: true,
+        logging: true,
+        onclone: function(clonedDoc) {
+          console.log('Document cloned for PDF generation');
+          // Ensure all styles are properly applied in the cloned document
+          const clonedContainer = clonedDoc.querySelector('div');
+          if (clonedContainer) {
+            clonedContainer.style.position = 'relative';
+            clonedContainer.style.left = '0';
+            clonedContainer.style.top = '0';
+          }
+        }
       },
       jsPDF: { 
         unit: 'mm', 
@@ -167,11 +202,32 @@ export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
       }
     };
     
+    console.log('Starting PDF generation with html2pdf...');
+    
     // Generate PDF
-    await window.html2pdf()
-      .set(options)
-      .from(tempContainer)
-      .save();
+    const pdfWorker = window.html2pdf();
+    console.log('pdfWorker created:', !!pdfWorker);
+    
+    if (!pdfWorker) {
+      throw new Error('Failed to create html2pdf worker');
+    }
+    
+    const workerWithSettings = pdfWorker.set(options);
+    console.log('Worker with settings:', !!workerWithSettings);
+    
+    if (!workerWithSettings) {
+      throw new Error('Failed to set options on html2pdf worker');
+    }
+    
+    const workerWithSource = workerWithSettings.from(tempContainer);
+    console.log('Worker with source:', !!workerWithSource);
+    
+    if (!workerWithSource) {
+      throw new Error('Failed to set source on html2pdf worker');
+    }
+    
+    await workerWithSource.save();
+    console.log('PDF saved successfully');
     
     // Clean up
     document.body.removeChild(tempContainer);
@@ -192,6 +248,15 @@ export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
 function createReportHTML(data) {
   const { state, layout, files } = data;
   
+  // Ensure we have valid data
+  const validFiles = Array.isArray(files) ? files : [];
+  const validLayout = layout || {};
+  
+  // Validate that we have meaningful data
+  if (validFiles.length === 0 && !validLayout.sheets && !validLayout.totalSheets) {
+    console.warn('Warning: Report data appears to be empty or incomplete');
+  }
+  
   return `
     <!DOCTYPE html>
     <html lang="ru">
@@ -205,6 +270,7 @@ function createReportHTML(data) {
                 color: #333;
                 margin: 0;
                 padding: 20px;
+                background-color: white;
             }
             .header {
                 text-align: center;
@@ -292,10 +358,10 @@ function createReportHTML(data) {
             <div class="subtitle">Система анализа раскладки DXF файлов</div>
         </div>
         
-        ${createGeneralInfoSection(state, files)}
-        ${createCalculationSection(files)}
-        ${createLayoutSection(layout)}
-        ${createSummarySection(layout, files)}
+        ${createGeneralInfoSection(state, validFiles)}
+        ${createCalculationSection(validFiles)}
+        ${createLayoutSection(validLayout)}
+        ${createSummarySection(validLayout, validFiles)}
         
         <div class="footer">
             <strong>Отчет сгенерирован автоматически</strong><br>
@@ -522,6 +588,9 @@ export async function generateSimplePDFReport(data, filename = 'dxf-pro-simple-r
     
     document.body.appendChild(tempContainer);
     
+    // Wait a bit for content to render
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Configure html2pdf options for simple report
     const options = {
       margin: [5, 5, 5, 5],
@@ -529,7 +598,18 @@ export async function generateSimplePDFReport(data, filename = 'dxf-pro-simple-r
       image: { type: 'jpeg', quality: 0.95 },
       html2canvas: { 
         scale: 1.5,
-        useCORS: true
+        useCORS: true,
+        logging: true,
+        onclone: function(clonedDoc) {
+          console.log('Document cloned for simple PDF generation');
+          // Ensure all styles are properly applied in the cloned document
+          const clonedContainer = clonedDoc.querySelector('div');
+          if (clonedContainer) {
+            clonedContainer.style.position = 'relative';
+            clonedContainer.style.left = '0';
+            clonedContainer.style.top = '0';
+          }
+        }
       },
       jsPDF: { 
         unit: 'mm', 
@@ -576,7 +656,7 @@ function createSimpleReportHTML(data) {
   }
   
   return `
-    <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;">
+    <div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; background-color: white; padding: 20px;">
         <h1 style="color: #2c3e50; text-align: center; margin-bottom: 30px;">Отчет DXF PRO</h1>
         
         <div style="margin-bottom: 20px;">
@@ -600,6 +680,3 @@ function createSimpleReportHTML(data) {
     </div>
   `;
 }
-
-// Export utility functions for backward compatibility
-export { ensureHtml2PDFLoaded as ensureJsPDFLoaded }; 

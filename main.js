@@ -1348,11 +1348,16 @@ async function initializeApp() {
     // Preload jsPDF library for better PDF export performance (non-blocking)
     preloadJsPDF().then(() => {
       console.log('jsPDF preloaded for better PDF export performance');
-    }).catch(() => {
-      console.log('jsPDF preload failed, will load on demand');
+    }).catch((error) => {
+      console.log('jsPDF preload failed, will load on demand:', error.message);
     });
     
-    // Initialize button states
+    // Preload html2pdf.js library for better PDF export performance (non-blocking)
+    preloadHtml2PDF().then(() => {
+      console.log('html2pdf.js preloaded for better PDF export performance');
+    }).catch((error) => {
+      console.log('html2pdf.js preload failed, will load on demand:', error.message);
+    });
     const calcBtn = $('calc');
     const nestBtn = $('nest');
     const prevFileBtn = $('prevFileBtn');
@@ -1796,11 +1801,24 @@ function initializeEventHandlers() {
         ? projectState.files.filter(f => f.includeInLayout && f.parsed)
         : [getActiveFile()];
       
+      // Log data for debugging
+      console.log('PDF Generation Data:');
+      console.log('- Layout:', layout);
+      console.log('- Files count:', files.length);
+      console.log('- Active file:', getActiveFile());
+      
       button.textContent = '📋 Генерация PDF...';
       setStatus('Генерация PDF отчета...', 'warn');
       
       // Try html2pdf.js first for proper Cyrillic support
       const reportData = { state, layout, files };
+      console.log('PDF report data:', reportData);
+      
+      // Validate data before sending to PDF generator
+      if (!reportData.layout && !reportData.files) {
+        throw new Error('Нет данных для создания отчета');
+      }
+      
       await generatePDFReportWithHtml2PDF(reportData, 'dxf-pro-report.pdf');
       setStatus('PDF отчет успешно создан и скачан', 'ok');
     } catch (error) {
@@ -1917,8 +1935,17 @@ function initializeEventHandlers() {
   setStatus('Готово к работе','ok');
 
   // Preload PDF libraries for better performance
-  preloadHtml2PDF().catch(err => console.warn('Failed to preload html2pdf.js:', err));
-  preloadJsPDF().catch(err => console.warn('Failed to preload jsPDF:', err));
+  preloadHtml2PDF().then(() => {
+    console.log('html2pdf.js preloaded successfully');
+  }).catch((error) => {
+    console.warn('Failed to preload html2pdf.js:', error.message);
+  });
+  
+  preloadJsPDF().then(() => {
+    console.log('jsPDF preloaded successfully');
+  }).catch((error) => {
+    console.warn('Failed to preload jsPDF:', error.message);
+  });
 }
 
 // Note: Event handlers moved to initializeEventHandlers function to avoid duplicates
