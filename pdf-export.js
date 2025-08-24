@@ -1,13 +1,34 @@
 /**
- * PDF Export Module for DXF PRO
+ * PDF Export Module for DXF PRO with html2pdf.js support
  * Generates detailed reports with calculation data, part tables, and layout graphics
+ * Full Cyrillic support via html2pdf.js
  */
 
+let html2pdfLoaded = false;
+let html2pdfScript = null;
 let jsPDFLoaded = false;
 let jsPDFScript = null;
 
 /**
- * Preload jsPDF library for better performance
+ * Preload html2pdf.js library for better performance
+ * @returns {Promise<boolean>} True if preloaded successfully
+ */
+export async function preloadHtml2PDF() {
+  try {
+    console.log('Preloading html2pdf.js library...');
+    const success = await ensureHtml2PDFLoaded();
+    if (success) {
+      console.log('html2pdf.js preloaded successfully');
+    }
+    return success;
+  } catch (error) {
+    console.warn('html2pdf.js preload failed:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Preload jsPDF library for better performance (fallback)
  * @returns {Promise<boolean>} True if preloaded successfully
  */
 export async function preloadJsPDF() {
@@ -22,6 +43,100 @@ export async function preloadJsPDF() {
     console.warn('jsPDF preload failed:', error.message);
     return false;
   }
+}
+
+/**
+ * Ensures html2pdf.js library is loaded
+ * @returns {Promise<boolean>} True if loaded successfully
+ */
+async function ensureHtml2PDFLoaded() {
+  if (html2pdfLoaded && isHtml2PDFAvailable()) {
+    return true;
+  }
+  
+  const cdnConfigs = [
+    {
+      url: 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js',
+      checkGlobal: () => window.html2pdf
+    },
+    {
+      url: 'https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js',
+      checkGlobal: () => window.html2pdf
+    },
+    {
+      url: 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js',
+      checkGlobal: () => window.html2pdf
+    }
+  ];
+  
+  console.log('Attempting to load html2pdf.js from CDNs...');
+  
+  for (let i = 0; i < cdnConfigs.length; i++) {
+    const config = cdnConfigs[i];
+    console.log(`Trying CDN ${i + 1}/${cdnConfigs.length}: ${config.url}`);
+    
+    try {
+      await loadHtml2PDFFromUrl(config.url, config.checkGlobal);
+      if (isHtml2PDFAvailable()) {
+        html2pdfLoaded = true;
+        console.log('html2pdf.js loaded and verified from:', config.url);
+        return true;
+      }
+    } catch (error) {
+      console.warn(`Failed to load html2pdf.js from ${config.url}:`, error.message);
+      continue;
+    }
+  }
+  
+  console.error('All html2pdf.js CDN attempts failed');
+  throw new Error('Не удалось загрузить библиотеку html2pdf.js. Проверьте соединение с интернетом.');
+}
+
+/**
+ * Check if html2pdf.js is available and working
+ * @returns {boolean}
+ */
+function isHtml2PDFAvailable() {
+  try {
+    return window.html2pdf && typeof window.html2pdf === 'function';
+  } catch (error) {
+    console.warn('Error checking html2pdf.js availability:', error);
+    return false;
+  }
+}
+
+/**
+ * Load html2pdf.js from a specific URL
+ * @param {string} url - CDN URL
+ * @param {Function} checkGlobal - Function to check if library is available
+ * @returns {Promise<void>}
+ */
+function loadHtml2PDFFromUrl(url, checkGlobal) {
+  return new Promise((resolve, reject) => {
+    if (html2pdfScript) {
+      document.head.removeChild(html2pdfScript);
+    }
+    
+    html2pdfScript = document.createElement('script');
+    html2pdfScript.src = url;
+    html2pdfScript.async = true;
+    
+    html2pdfScript.onload = () => {
+      setTimeout(() => {
+        if (checkGlobal()) {
+          resolve();
+        } else {
+          reject(new Error('Library not found after loading'));
+        }
+      }, 200);
+    };
+    
+    html2pdfScript.onerror = () => {
+      reject(new Error(`Failed to load from ${url}`));
+    };
+    
+    document.head.appendChild(html2pdfScript);
+  });
 }
 
 /**
@@ -402,11 +517,24 @@ function setupPDFForCyrillic(pdf) {
       creator: 'DXF PRO'
     });
     
+    // Try to set encoding for better Unicode support
+    try {
+      pdf.setR2L(false); // Set right-to-left to false for Russian text
+    } catch (e) {
+      console.warn('Could not set R2L property:', e);
+    }
+    
+    // Try to set language for better text handling
+    try {
+      if (pdf.setLanguage) {
+        pdf.setLanguage('ru');
+      }
+    } catch (e) {
+      console.warn('Could not set language:', e);
+    }
+    
     // Use standard font for maximum compatibility
     pdf.setFont('helvetica', 'normal');
-    
-    // Ensure proper encoding for Cyrillic characters
-    pdf.setR2L(false); // Set right-to-left to false for Russian text
     
     console.log('PDF configured for Russian text support');
   } catch (error) {
@@ -424,11 +552,72 @@ function setupPDFForCyrillic(pdf) {
  */
 function addRussianText(pdf, text, x, y, options = {}) {
   try {
-    // Ensure proper encoding for Cyrillic characters
-    // Use actual Russian text with UTF-8 encoding - no transliteration
+    console.log(`🔤 Rendering Russian text: "${text}"`);
+    
+    // Try to use built-in font that supports Cyrillic
+    const originalFont = pdf.getFont();
+    console.log(`📝 Original font:`, originalFont);
+    
+    // Try different fonts that might support Cyrillic
+    const fontsToTry = ['helvetica', 'times', 'courier'];
+    let success = false;
+    
+    for (const font of fontsToTry) {
+      try {
+        console.log(`🎨 Trying font: ${font}`);
+        pdf.setFont(font, 'normal');
+        
+        if (options.maxWidth) {
+          // Handle text wrapping for long text
+          const lines = pdf.splitTextToSize(text, options.maxWidth);
+          if (options.maxLines && lines.length > options.maxLines) {
+            lines.splice(options.maxLines - 1);
+            lines[lines.length - 1] += '...';
+          }
+          
+          lines.forEach((line, index) => {
+            console.log(`📄 Rendering line ${index + 1}: "${line}"`);
+            pdf.text(line, x, y + (index * (options.lineHeight || 7)));
+          });
+          
+          success = true;
+          console.log(`✅ Successfully rendered with font: ${font}`);
+          break;
+        } else {
+          // Try to render the text
+          console.log(`📄 Rendering text: "${text}"`);
+          pdf.text(text, x, y);
+          success = true;
+          console.log(`✅ Successfully rendered with font: ${font}`);
+          break;
+        }
+      } catch (fontError) {
+        console.warn(`❌ Font ${font} failed for Russian text:`, fontError);
+        continue;
+      }
+    }
+    
+    // Restore original font
+    if (originalFont) {
+      try {
+        pdf.setFont(originalFont.fontName, originalFont.fontStyle);
+      } catch (e) {
+        // Fallback to helvetica
+        pdf.setFont('helvetica', 'normal');
+      }
+    }
+    
+    if (success) {
+      return options.lineHeight || 7;
+    }
+    
+    // If all fonts failed, try transliteration as last resort
+    console.warn('❌ All fonts failed for Russian text, using transliteration');
+    const transliteratedText = transliterateToLatin(text);
+    console.log(`🔄 Transliterated: "${text}" → "${transliteratedText}"`);
+    
     if (options.maxWidth) {
-      // Handle text wrapping for long text
-      const lines = pdf.splitTextToSize(text, options.maxWidth);
+      const lines = pdf.splitTextToSize(transliteratedText, options.maxWidth);
       if (options.maxLines && lines.length > options.maxLines) {
         lines.splice(options.maxLines - 1);
         lines[lines.length - 1] += '...';
@@ -440,17 +629,39 @@ function addRussianText(pdf, text, x, y, options = {}) {
       
       return lines.length * (options.lineHeight || 7);
     } else {
-      // Ensure proper UTF-8 handling
-      pdf.text(text, x, y);
+      pdf.text(transliteratedText, x, y);
       return options.lineHeight || 7;
     }
+    
   } catch (error) {
-    console.warn('Text rendering failed, using ASCII fallback:', error);
-    // Last resort fallback to ASCII
-    const asciiText = text.replace(/[^\x00-\x7F]/g, '?');
-    pdf.text(asciiText, x, y);
+    console.warn('Text rendering failed completely:', error);
+    // Ultimate fallback - just show what we can
+    const safeText = text.replace(/[^\x00-\x7F]/g, '?');
+    pdf.text(safeText, x, y);
     return options.lineHeight || 7;
   }
+}
+
+/**
+ * Transliterate Russian text to Latin for fallback
+ * @param {string} text - Russian text to transliterate
+ * @returns {string} Transliterated text
+ */
+function transliterateToLatin(text) {
+  const transliterationMap = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
+    'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+    'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+    'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch',
+    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+  };
+  
+  return text.split('').map(char => transliterationMap[char] || char).join('');
 }
 
 /**
@@ -601,7 +812,383 @@ function addSingleFilePartsTable(pdf, file, layout, margin, yPos, lineHeight, pa
     });
   }
   
-  return yPos + lineHeight;
+    return yPos + lineHeight;
+}
+
+/**
+ * Generate PDF report using html2pdf.js with full Cyrillic support
+ * @param {Object} data - Report data
+ * @param {string} filename - Output filename
+ * @returns {Promise<void>}
+ */
+export async function generatePDFReportWithHtml2PDF(data, filename = 'dxf-pro-report.pdf') {
+  try {
+    console.log('Generating PDF report with html2pdf.js...');
+    
+    if (!isHtml2PDFAvailable()) {
+      await ensureHtml2PDFLoaded();
+    }
+    
+    // Create HTML content for the report
+    const htmlContent = createReportHTML(data);
+    
+    // Create temporary container
+    const tempContainer = document.createElement('div');
+    tempContainer.style.position = 'absolute';
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.top = '-9999px';
+    tempContainer.style.width = '800px';
+    tempContainer.style.backgroundColor = 'white';
+    tempContainer.style.color = 'black';
+    tempContainer.style.fontFamily = 'Arial, sans-serif';
+    tempContainer.style.padding = '20px';
+    tempContainer.innerHTML = htmlContent;
+    
+    document.body.appendChild(tempContainer);
+    
+    // Configure html2pdf options
+    const options = {
+      margin: [10, 10, 10, 10],
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { 
+        scale: 2,
+        useCORS: true,
+        allowTaint: true
+      },
+      jsPDF: { 
+        unit: 'mm', 
+        format: 'a4', 
+        orientation: 'portrait'
+      }
+    };
+    
+    // Generate PDF
+    await window.html2pdf()
+      .set(options)
+      .from(tempContainer)
+      .save();
+    
+    // Clean up
+    document.body.removeChild(tempContainer);
+    
+    console.log('PDF report generated successfully with html2pdf.js');
+    
+  } catch (error) {
+    console.error('Error generating PDF report with html2pdf.js:', error);
+    throw new Error(`Ошибка генерации PDF с html2pdf.js: ${error.message}`);
+  }
+}
+
+/**
+ * Create HTML content for the report
+ * @param {Object} data - Report data
+ * @returns {string} HTML content
+ */
+function createReportHTML(data) {
+  const { state, layout, files } = data;
+  
+  return `
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {
+                font-family: 'Arial', 'Helvetica', sans-serif;
+                font-size: 12px;
+                line-height: 1.4;
+                color: #333;
+                margin: 0;
+                padding: 20px;
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 2px solid #3498db;
+                padding-bottom: 15px;
+            }
+            .header h1 {
+                color: #2c3e50;
+                font-size: 24px;
+                margin: 0 0 10px 0;
+            }
+            .header .subtitle {
+                color: #7f8c8d;
+                font-size: 14px;
+            }
+            .section {
+                margin-bottom: 25px;
+            }
+            .section h2 {
+                color: #34495e;
+                font-size: 16px;
+                margin: 0 0 15px 0;
+                border-left: 4px solid #3498db;
+                padding-left: 10px;
+            }
+            .data-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 10px 0;
+            }
+            .data-table th,
+            .data-table td {
+                border: 1px solid #ddd;
+                padding: 8px 12px;
+                text-align: left;
+            }
+            .data-table th {
+                background-color: #f8f9fa;
+                font-weight: bold;
+            }
+            .data-table tr:nth-child(even) {
+                background-color: #f8f9fa;
+            }
+            .summary-item {
+                display: flex;
+                justify-content: space-between;
+                margin: 5px 0;
+                padding: 5px 0;
+                border-bottom: 1px solid #ecf0f1;
+            }
+            .summary-label {
+                font-weight: bold;
+                color: #2c3e50;
+            }
+            .summary-value {
+                color: #34495e;
+            }
+            .layout-info {
+                background-color: #f8f9fa;
+                padding: 15px;
+                border-radius: 5px;
+                margin: 10px 0;
+            }
+            .footer {
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 2px solid #bdc3c7;
+                text-align: center;
+                font-size: 10px;
+                color: #7f8c8d;
+            }
+            .logo {
+                font-size: 18px;
+                font-weight: bold;
+                color: #3498db;
+                margin-bottom: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="logo">DXF PRO</div>
+            <h1>Отчет по раскладке</h1>
+            <div class="subtitle">Система анализа раскладки DXF файлов</div>
+        </div>
+        
+        ${createGeneralInfoSection(state, files)}
+        ${createCalculationSection(files)}
+        ${createLayoutSection(layout)}
+        ${createSummarySection(layout, files)}
+        
+        <div class="footer">
+            <strong>Отчет сгенерирован автоматически</strong><br>
+            Дата: ${new Date().toLocaleDateString('ru-RU')} | 
+            Время: ${new Date().toLocaleTimeString('ru-RU')}<br>
+            Система анализа раскладки DXF PRO v1.0
+        </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Create general information section
+ * @param {Object} state - Application state
+ * @param {Array} files - Files data
+ * @returns {string} HTML section
+ */
+function createGeneralInfoSection(state, files) {
+  return `
+    <div class="section">
+        <h2>Общая информация</h2>
+        <div class="data-table">
+            <table>
+                <tr>
+                    <th>Параметр</th>
+                    <th>Значение</th>
+                </tr>
+                <tr>
+                    <td>Количество файлов</td>
+                    <td>${files ? files.length : 0}</td>
+                </tr>
+                <tr>
+                    <td>Дата создания</td>
+                    <td>${new Date().toLocaleDateString('ru-RU')}</td>
+                </tr>
+                <tr>
+                    <td>Время создания</td>
+                    <td>${new Date().toLocaleTimeString('ru-RU')}</td>
+                </tr>
+                <tr>
+                    <td>Версия программы</td>
+                    <td>1.0.0</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+  `;
+}
+
+/**
+ * Create calculation results section
+ * @param {Array} files - Files data
+ * @returns {string} HTML section
+ */
+function createCalculationSection(files) {
+  if (!files || files.length === 0) {
+    return `
+      <div class="section">
+        <h2>Результаты расчетов</h2>
+        <p>Нет данных для отображения</p>
+      </div>
+    `;
+  }
+  
+  const tableRows = files.map(file => {
+    const cost = file.calculatedCost || {};
+    const parsed = file.parsed || {};
+    
+    return `
+      <tr>
+        <td>${file.name || 'Неизвестный файл'}</td>
+        <td>${(cost.timeForAllParts || 0).toFixed(1)} мин</td>
+        <td>${(cost.costForAllParts || 0).toFixed(0)} ₽</td>
+        <td>${(parsed.totalLen || 0).toFixed(3)} м</td>
+        <td>${parsed.pierceCount || 0}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  return `
+    <div class="section">
+        <h2>Результаты расчетов</h2>
+        <div class="data-table">
+            <table>
+                <tr>
+                    <th>Файл</th>
+                    <th>Время работ</th>
+                    <th>Стоимость</th>
+                    <th>Длина реза</th>
+                    <th>Врезки</th>
+                </tr>
+                ${tableRows}
+            </table>
+        </div>
+    </div>
+  `;
+}
+
+/**
+ * Create layout information section
+ * @param {Object} layout - Layout data
+ * @returns {string} HTML section
+ */
+function createLayoutSection(layout) {
+  if (!layout) {
+    return `
+      <div class="section">
+        <h2>Информация о раскладке</h2>
+        <p>Данные о раскладке недоступны</p>
+      </div>
+    `;
+  }
+  
+  return `
+    <div class="section">
+        <h2>Информация о раскладке</h2>
+        <div class="layout-info">
+            <div class="summary-item">
+                <span class="summary-label">Размер листа:</span>
+                <span class="summary-value">${layout.sheetWidth || 0} x ${layout.sheetHeight || 0} мм</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Количество листов:</span>
+                <span class="summary-value">${layout.sheets || layout.totalSheets || 1}</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Эффективность раскладки:</span>
+                <span class="summary-value">${(layout.efficiency || 0).toFixed(1)}%</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">Общая площадь:</span>
+                <span class="summary-value">${((layout.sheetWidth || 0) * (layout.sheetHeight || 0) * (layout.sheets || 1) / 1000000).toFixed(2)} м²</span>
+            </div>
+        </div>
+    </div>
+  `;
+}
+
+/**
+ * Create final summary section
+ * @param {Object} layout - Layout data
+ * @param {Array} files - Files data
+ * @returns {string} HTML section
+ */
+function createSummarySection(layout, files) {
+  let totalTime = 0;
+  let totalCost = 0;
+  let totalLength = 0;
+  let totalPierces = 0;
+  
+  if (files && files.length > 0) {
+    files.forEach(file => {
+      if (file.calculatedCost) {
+        totalTime += file.calculatedCost.timeForAllParts || 0;
+        totalCost += file.calculatedCost.costForAllParts || 0;
+      }
+      if (file.parsed) {
+        totalLength += file.parsed.totalLen || 0;
+        totalPierces += file.parsed.pierceCount || 0;
+      }
+    });
+  }
+  
+  return `
+    <div class="section">
+        <h2>Итоговая сводка</h2>
+        <div class="data-table">
+            <table>
+                <tr>
+                    <th>Параметр</th>
+                    <th>Значение</th>
+                </tr>
+                <tr>
+                    <td>Общее время работ</td>
+                    <td>${totalTime.toFixed(1)} мин</td>
+                </tr>
+                <tr>
+                    <td>Общая стоимость</td>
+                    <td>${totalCost.toFixed(0)} ₽</td>
+                </tr>
+                <tr>
+                    <td>Общая длина реза</td>
+                    <td>${totalLength.toFixed(3)} м</td>
+                </tr>
+                <tr>
+                    <td>Общее количество врезок</td>
+                    <td>${totalPierces}</td>
+                </tr>
+                <tr>
+                    <td>Количество листов</td>
+                    <td>${layout?.sheets || layout?.totalSheets || 1}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+  `;
 }
 
 function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pageWidth, pageHeight) {

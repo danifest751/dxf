@@ -9,6 +9,8 @@ import { loadConfig, applyConfigToForm, getConfig, loadConfigFromStorage } from 
 import { perfMonitor, measurePerformance } from './performance.js';
 import { generatePDFReport, preloadJsPDF } from './pdf-export.js';
 import { exportLayoutAsJPEG } from './jpeg-export.js';
+// Import the new html2pdf functions
+import { generatePDFReport as generatePDFReportWithHtml2PDF, preloadHtml2PDF } from './pdf-export-html2pdf.js';
 
 // Multi-file project state
 const projectState = {
@@ -1797,13 +1799,15 @@ function initializeEventHandlers() {
       button.textContent = '📋 Генерация PDF...';
       setStatus('Генерация PDF отчета...', 'warn');
       
-      await generatePDFReport(state, layout, files);
+      // Try html2pdf.js first for proper Cyrillic support
+      const reportData = { state, layout, files };
+      await generatePDFReportWithHtml2PDF(reportData, 'dxf-pro-report.pdf');
       setStatus('PDF отчет успешно создан и скачан', 'ok');
     } catch (error) {
       console.error('PDF export error:', error);
       let errorMessage = 'Ошибка экспорта PDF';
       
-      if (error.message.includes('jsPDF')) {
+      if (error.message.includes('html2pdf')) {
         errorMessage += ': Проблема с загрузкой библиотеки. Проверьте интернет-соединение.';
       } else {
         errorMessage += `: ${error.message}`;
@@ -1911,6 +1915,10 @@ function initializeEventHandlers() {
 
   // Init
   setStatus('Готово к работе','ok');
+
+  // Preload PDF libraries for better performance
+  preloadHtml2PDF().catch(err => console.warn('Failed to preload html2pdf.js:', err));
+  preloadJsPDF().catch(err => console.warn('Failed to preload jsPDF:', err));
 }
 
 // Note: Event handlers moved to initializeEventHandlers function to avoid duplicates
