@@ -327,6 +327,9 @@ export async function generatePDFReport(state, layout, files = null) {
     console.log('PDF instance created successfully, methods available:', 
       Object.getOwnPropertyNames(pdf).filter(name => typeof pdf[name] === 'function').slice(0, 10));
     
+    // Configure PDF for better Cyrillic support
+    setupPDFForCyrillic(pdf);
+    
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     
@@ -336,15 +339,15 @@ export async function generatePDFReport(state, layout, files = null) {
     
     // Header
     pdf.setFontSize(18);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('DXF PRO - Отчет по раскладке', margin, yPos);
+    pdf.setFont('helvetica', 'bold');
+    addTextWithFallback(pdf, 'DXF PRO - Отчет по раскладке', margin, yPos);
     yPos += lineHeight * 2;
     
     // Date and time
     pdf.setFontSize(10);
-    pdf.setFont(undefined, 'normal');
+    pdf.setFont('helvetica', 'normal');
     const now = new Date();
-    pdf.text(`Дата создания: ${now.toLocaleDateString('ru-RU')} ${now.toLocaleTimeString('ru-RU')}`, margin, yPos);
+    addTextWithFallback(pdf, `Дата создания: ${now.toLocaleDateString('ru-RU')} ${now.toLocaleTimeString('ru-RU')}`, margin, yPos);
     yPos += lineHeight * 2;
     
     // Summary section
@@ -389,6 +392,66 @@ export async function generatePDFReport(state, layout, files = null) {
 }
 
 /**
+ * Setup PDF for better Cyrillic character support
+ * @param {Object} pdf - jsPDF instance
+ */
+function setupPDFForCyrillic(pdf) {
+  try {
+    // Try to set encoding for better Cyrillic support
+    if (pdf.setCharSpace) {
+      pdf.setCharSpace(0.5);
+    }
+    
+    // Set default font that better supports Latin characters
+    pdf.setFont('helvetica', 'normal');
+    
+    console.log('PDF configured for better text support');
+  } catch (error) {
+    console.warn('Could not configure PDF font settings:', error);
+  }
+}
+
+/**
+ * Add text with fallback for unsupported characters
+ * @param {Object} pdf - jsPDF instance
+ * @param {string} text - Text to add
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ */
+function addTextWithFallback(pdf, text, x, y) {
+  try {
+    // Convert Cyrillic to transliterated version for better compatibility
+    const fallbackText = transliterateCyrillic(text);
+    pdf.text(fallbackText, x, y);
+  } catch (error) {
+    console.warn('Text rendering failed, using simplified version:', error);
+    // Last resort: use simplified ASCII version
+    const asciiText = text.replace(/[^\x00-\x7F]/g, '?');
+    pdf.text(asciiText, x, y);
+  }
+}
+
+/**
+ * Transliterate Cyrillic characters to Latin for PDF compatibility
+ * @param {string} text - Text with Cyrillic characters
+ * @returns {string} Transliterated text
+ */
+function transliterateCyrillic(text) {
+  const cyrillicMap = {
+    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo', 'Ж': 'Zh',
+    'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
+    'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts',
+    'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+    'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
+    'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+  };
+  
+  return text.replace(/[А-Яа-яЁё]/g, match => cyrillicMap[match] || match);
+}
+
+/**
  * Get jsPDF constructor with improved detection
  * @returns {Function|null} jsPDF constructor or null if not found
  */
@@ -421,24 +484,24 @@ function getJsPDFConstructor() {
 
 function addSummarySection(pdf, layout, margin, yPos, lineHeight) {
   pdf.setFontSize(14);
-  pdf.setFont(undefined, 'bold');
-  pdf.text('Сводка по раскладке', margin, yPos);
+  pdf.setFont('helvetica', 'bold');
+  addTextWithFallback(pdf, 'Svodka po raskladke', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(10);
-  pdf.setFont(undefined, 'normal');
+  pdf.setFont('helvetica', 'normal');
   
   const summaryData = [
-    ['Количество листов:', layout.totalSheets || layout.sheets || '—'],
-    ['Эффективность:', layout.efficiency ? `${layout.efficiency.toFixed(1)}%` : '—'],
-    ['Размер листа:', `${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} мм`],
-    ['Отступ:', `${document.getElementById('margin')?.value || '—'} мм`],
-    ['Зазор:', `${document.getElementById('spacing')?.value || '—'} мм`]
+    ['Kolichestvo listov:', layout.totalSheets || layout.sheets || '—'],
+    ['Effektivnost:', layout.efficiency ? `${layout.efficiency.toFixed(1)}%` : '—'],
+    ['Razmer lista:', `${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} mm`],
+    ['Otstup:', `${document.getElementById('margin')?.value || '—'} mm`],
+    ['Zazor:', `${document.getElementById('spacing')?.value || '—'} mm`]
   ];
   
   summaryData.forEach(([label, value]) => {
-    pdf.text(label, margin, yPos);
-    pdf.text(String(value), margin + 80, yPos);
+    addTextWithFallback(pdf, label, margin, yPos);
+    addTextWithFallback(pdf, String(value), margin + 80, yPos);
     yPos += lineHeight;
   });
   
@@ -449,34 +512,34 @@ function addSingleFilePartsTable(pdf, file, layout, margin, yPos, lineHeight, pa
   if (!file || !file.parsed) return yPos;
   
   pdf.setFontSize(14);
-  pdf.setFont(undefined, 'bold');
-  pdf.text('Данные по детали', margin, yPos);
+  pdf.setFont('helvetica', 'bold');
+  addTextWithFallback(pdf, 'Dannye po detali', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(10);
-  pdf.setFont(undefined, 'normal');
+  pdf.setFont('helvetica', 'normal');
   
   const tableData = [
-    ['Файл:', file.name],
-    ['Длина реза:', `${file.parsed.totalLen?.toFixed(3) || '—'} м`],
-    ['Количество врезок:', file.parsed.pierceCount || '—'],
-    ['Количество объектов:', file.parsed.entities?.length || '—'],
-    ['Толщина:', `${file.settings?.thickness || '—'} мм`],
-    ['Мощность лазера:', `${file.settings?.power || '—'} кВт`],
-    ['Тип газа:', file.settings?.gas || '—']
+    ['Fayl:', file.name],
+    ['Dlina reza:', `${file.parsed.totalLen?.toFixed(3) || '—'} m`],
+    ['Kolichestvo vrezok:', file.parsed.pierceCount || '—'],
+    ['Kolichestvo obektov:', file.parsed.entities?.length || '—'],
+    ['Tolschina:', `${file.settings?.thickness || '—'} mm`],
+    ['Moschnost lazera:', `${file.settings?.power || '—'} kW`],
+    ['Tip gaza:', file.settings?.gas || '—']
   ];
   
   // Add cost calculations if available
   if (file.calculatedCost) {
     tableData.push(
-      ['Время на деталь:', `${file.calculatedCost.timePerPart?.toFixed(2) || '—'} мин`],
-      ['Стоимость детали:', `${file.calculatedCost.costPerPart?.toFixed(2) || '—'} ₽`]
+      ['Vremya na detal:', `${file.calculatedCost.timePerPart?.toFixed(2) || '—'} min`],
+      ['Stoimost detali:', `${file.calculatedCost.costPerPart?.toFixed(2) || '—'} rub`]
     );
   }
   
   tableData.forEach(([label, value]) => {
-    pdf.text(label, margin, yPos);
-    pdf.text(String(value), margin + 80, yPos);
+    addTextWithFallback(pdf, label, margin, yPos);
+    addTextWithFallback(pdf, String(value), margin + 80, yPos);
     yPos += lineHeight;
   });
   
@@ -485,21 +548,21 @@ function addSingleFilePartsTable(pdf, file, layout, margin, yPos, lineHeight, pa
 
 function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pageWidth, pageHeight) {
   pdf.setFontSize(14);
-  pdf.setFont(undefined, 'bold');
-  pdf.text('Детали в раскладке', margin, yPos);
+  pdf.setFont('helvetica', 'bold');
+  addTextWithFallback(pdf, 'Detali v raskladke', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(8);
-  pdf.setFont(undefined, 'normal');
+  pdf.setFont('helvetica', 'normal');
   
   // Table headers
-  const headers = ['Файл', 'Кол-во', 'Длина (м)', 'Врезки', 'Время (мин)', 'Стоимость (₽)'];
+  const headers = ['Fayl', 'Kol-vo', 'Dlina (m)', 'Vrezki', 'Vremya (min)', 'Stoimost (rub)'];
   const colWidths = [60, 20, 25, 20, 25, 30];
   let xPos = margin;
   
-  pdf.setFont(undefined, 'bold');
+  pdf.setFont('helvetica', 'bold');
   headers.forEach((header, i) => {
-    pdf.text(header, xPos, yPos);
+    addTextWithFallback(pdf, header, xPos, yPos);
     xPos += colWidths[i];
   });
   yPos += lineHeight;
@@ -508,7 +571,7 @@ function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pa
   pdf.line(margin, yPos - 2, pageWidth - margin, yPos - 2);
   yPos += 2;
   
-  pdf.setFont(undefined, 'normal');
+  pdf.setFont('helvetica', 'normal');
   
   files.forEach(file => {
     if (!file.parsed) return;
@@ -524,7 +587,7 @@ function addMultiFilePartsTable(pdf, files, layout, margin, yPos, lineHeight, pa
     ];
     
     rowData.forEach((data, i) => {
-      pdf.text(data, xPos, yPos);
+      addTextWithFallback(pdf, data, xPos, yPos);
       xPos += colWidths[i];
     });
     yPos += lineHeight;
@@ -550,8 +613,8 @@ function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeig
   }
   
   pdf.setFontSize(14);
-  pdf.setFont(undefined, 'bold');
-  pdf.text('Схема раскладки', margin, yPos);
+  pdf.setFont('helvetica', 'bold');
+  addTextWithFallback(pdf, 'Skhema raskladki', margin, yPos);
   yPos += lineHeight * 1.5;
   
   // Simplified layout representation
@@ -566,16 +629,16 @@ function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeig
   
   // Add sheet info
   pdf.setFontSize(8);
-  const sheetInfo = `Лист: ${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} мм`;
-  pdf.text(sheetInfo, margin + 5, yPos + 10);
+  const sheetInfo = `List: ${document.getElementById('sW')?.value || '—'} x ${document.getElementById('sH')?.value || '—'} mm`;
+  addTextWithFallback(pdf, sheetInfo, margin + 5, yPos + 10);
   
   // Draw parts representation (simplified)
   if (layout.sheets || layout.totalSheets) {
     const sheetsCount = layout.totalSheets || layout.sheets || 1;
-    pdf.text(`Листов: ${sheetsCount}`, margin + 5, yPos + 20);
+    addTextWithFallback(pdf, `Listov: ${sheetsCount}`, margin + 5, yPos + 20);
     
     if (layout.efficiency) {
-      pdf.text(`Эффективность: ${layout.efficiency.toFixed(1)}%`, margin + 5, yPos + 30);
+      addTextWithFallback(pdf, `Effektivnost: ${layout.efficiency.toFixed(1)}%`, margin + 5, yPos + 30);
     }
   }
   
@@ -584,12 +647,12 @@ function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeig
 
 function addFinalSummary(pdf, layout, files, margin, yPos, lineHeight) {
   pdf.setFontSize(14);
-  pdf.setFont(undefined, 'bold');
-  pdf.text('Итоговая сводка', margin, yPos);
+  pdf.setFont('helvetica', 'bold');
+  addTextWithFallback(pdf, 'Itogovaya svodka', margin, yPos);
   yPos += lineHeight * 1.5;
   
   pdf.setFontSize(10);
-  pdf.setFont(undefined, 'normal');
+  pdf.setFont('helvetica', 'normal');
   
   // Calculate totals
   let totalTime = 0;
@@ -611,16 +674,16 @@ function addFinalSummary(pdf, layout, files, margin, yPos, lineHeight) {
   }
   
   const finalData = [
-    ['Общее время работ:', `${totalTime.toFixed(2)} мин`],
-    ['Общая стоимость:', `${totalCost.toFixed(2)} ₽`],
-    ['Общая длина реза:', `${totalLength.toFixed(3)} м`],
-    ['Общее количество врезок:', String(totalPierces)],
-    ['Количество листов:', String(layout.totalSheets || layout.sheets || '—')]
+    ['Obschee vremya rabot:', `${totalTime.toFixed(2)} min`],
+    ['Obschaya stoimost:', `${totalCost.toFixed(2)} rub`],
+    ['Obschaya dlina reza:', `${totalLength.toFixed(3)} m`],
+    ['Obschee kolichestvo vrezok:', String(totalPierces)],
+    ['Kolichestvo listov:', String(layout.totalSheets || layout.sheets || '—')]
   ];
   
   finalData.forEach(([label, value]) => {
-    pdf.text(label, margin, yPos);
-    pdf.text(value, margin + 100, yPos);
+    addTextWithFallback(pdf, label, margin, yPos);
+    addTextWithFallback(pdf, value, margin + 100, yPos);
     yPos += lineHeight;
   });
 }
