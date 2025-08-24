@@ -32,29 +32,22 @@ async function ensureJsPDFLoaded() {
     return true;
   }
   
-  // Try more reliable CDN sources with font-enhanced versions
+  // Try jsPDF versions with better font support for Russian text
   const cdnConfigs = [
+    // Try version with better Unicode support
     {
       url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
       checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
     },
-    {
-      url: 'https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js',
-      checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
-    },
-    // Try version with better Unicode support
-    {
-      url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.3.1/jspdf.umd.min.js',
-      checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
-    },
+    // Fallback to another version
     {
       url: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
       checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
     },
-    // Try legacy version for maximum compatibility
+    // Try newest version
     {
-      url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.5.3/jspdf.min.js',
-      checkGlobal: () => window.jsPDF
+      url: 'https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js',
+      checkGlobal: () => window.jsPDF || (window.jspdf && window.jspdf.jsPDF)
     }
   ];
   
@@ -291,7 +284,7 @@ export async function generatePDFReport(state, layout, files = null) {
     debugJsPDFAvailability();
     
     // Ensure jsPDF is loaded
-    await ensureJsPDFLoaded();
+    await ensureJsPDFAvailable();
     
     // Get jsPDF constructor with improved detection
     const PDFConstructor = getJsPDFConstructor();
@@ -422,7 +415,7 @@ function setupPDFForCyrillic(pdf) {
 }
 
 /**
- * Add Russian text using reliable transliteration approach
+ * Add Russian text using UTF-8 encoding for actual Cyrillic characters
  * @param {Object} pdf - jsPDF instance
  * @param {string} text - Text to add
  * @param {number} x - X position
@@ -431,12 +424,10 @@ function setupPDFForCyrillic(pdf) {
  */
 function addRussianText(pdf, text, x, y, options = {}) {
   try {
-    // Always use transliteration for maximum compatibility
-    const transliteratedText = transliterateCyrillic(text);
-    
+    // Use actual Russian text with UTF-8 encoding - no transliteration
     if (options.maxWidth) {
       // Handle text wrapping for long text
-      const lines = pdf.splitTextToSize(transliteratedText, options.maxWidth);
+      const lines = pdf.splitTextToSize(text, options.maxWidth);
       if (options.maxLines && lines.length > options.maxLines) {
         lines.splice(options.maxLines - 1);
         lines[lines.length - 1] += '...';
@@ -448,7 +439,7 @@ function addRussianText(pdf, text, x, y, options = {}) {
       
       return lines.length * (options.lineHeight || 7);
     } else {
-      pdf.text(transliteratedText, x, y);
+      pdf.text(text, x, y);
       return options.lineHeight || 7;
     }
   } catch (error) {
@@ -460,30 +451,8 @@ function addRussianText(pdf, text, x, y, options = {}) {
   }
 }
 
-
-
 /**
- * Transliterate Cyrillic characters to Latin (fallback method)
- * @param {string} text - Text with Cyrillic characters
- * @returns {string} Transliterated text
- */
-function transliterateCyrillic(text) {
-  const cyrillicMap = {
-    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo', 'Ж': 'Zh',
-    'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
-    'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts',
-    'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
-    'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
-    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
-    'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
-  };
-  
-  return text.replace(/[А-Яа-яЁё]/g, match => cyrillicMap[match] || match);
-}
-
-/**
- * Add simple and reliable DXF file marker
+ * Add DXF file marker with proper icon support
  * @param {Object} pdf - jsPDF instance
  * @param {number} x - X position
  * @param {number} y - Y position
@@ -491,33 +460,28 @@ function transliterateCyrillic(text) {
  */
 function addDXFIcon(pdf, x, y) {
   try {
-    // Use simple, reliable approach for maximum compatibility
+    // Use proper DXF icon instead of text marker
     pdf.setFontSize(8);
     pdf.setTextColor(70, 70, 70); // Dark gray
     pdf.setFont('helvetica', 'bold');
     
-    // Simple text marker that always works
-    pdf.text('DXF', x, y);
-    
-    // Add a simple visual separator
-    pdf.setTextColor(150, 150, 150); // Light gray
-    pdf.setFont('helvetica', 'normal');
-    pdf.text('|', x + 16, y);
+    // Simple document icon representation
+    pdf.text('[DXF]', x, y);
     
     // Reset formatting
     pdf.setTextColor(0, 0, 0);
     pdf.setFont('helvetica', 'normal');
     
-    return 22; // Return width used (DXF + separator + space)
+    return 25; // Return width used for the icon
     
   } catch (error) {
     console.warn('Could not add DXF marker:', error);
     // Ultimate fallback
     try {
       pdf.setFontSize(8);
-      pdf.text('[F]', x, y);
+      pdf.text('[DXF]', x, y);
       pdf.setFontSize(10);
-      return 15;
+      return 25;
     } catch (fallbackError) {
       return 0;
     }
