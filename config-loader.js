@@ -19,8 +19,8 @@ const defaultConfig = {
     machineHourPrice: 1200.0
   },
   sheet: {
-    width: 1500,
-    height: 3000,
+    width: 1250,
+    height: 2500,
     margin: 10,
     spacing: 5,
     quantity: 1

@@ -7,6 +7,8 @@ import { createAnnotatedDXF, createDXFWithMarkers, createSVG, createCSV, downloa
 import { makeRunTests } from './tests.js';
 import { loadConfig, applyConfigToForm, getConfig, loadConfigFromStorage } from './config-loader.js';
 import { perfMonitor, measurePerformance } from './performance.js';
+import { generatePDFReport } from './pdf-export.js';
+import { exportLayoutAsJPEG } from './jpeg-export.js';
 
 // Multi-file project state
 const projectState = {
@@ -1270,7 +1272,7 @@ function removeFile(fileId) {
     safeDraw();
     
     // Disable buttons
-    ['calc','nest','dlOrig','dlAnn','dlDXFMarkers','dlSVG','dlCSV','dlReport'].forEach(id => {
+    ['calc','nest','dlAnn','dlPDF','dlJPEG'].forEach(id => {
       const el = $(id); 
       if (el) el.disabled = true;
     });
@@ -1750,13 +1752,60 @@ function initializeEventHandlers() {
     safeDraw() 
   });
 
-  // Exports
-  on($('dlOrig'),'click',()=>downloadText('original.dxf',state.rawDXF));
-  on($('dlAnn'),'click',()=>downloadText('annotated_comments.dxf',createAnnotatedDXF(state.rawDXF,state.parsed)));
-  on($('dlDXFMarkers'),'click',()=>downloadText('with_markers.dxf',createDXFWithMarkers(state.rawDXF,state.parsed,0.5)));
-  on($('dlSVG'),'click',()=>downloadText('drawing.svg',createSVG(state.parsed)));
-  on($('dlCSV'),'click',()=>downloadText('entities.csv',createCSV(state.parsed)));
-  on($('dlReport'),'click',()=>downloadText('nesting_report.txt', makeNestingReport(state)));
+  // Modern Export Functions
+  on($('dlAnn'),'click', async () => {
+    try {
+      if (!state.parsed) {
+        setStatus('Нет данных для экспорта', 'err');
+        return;
+      }
+      downloadText('annotated_comments.dxf', createAnnotatedDXF(state.rawDXF, state.parsed));
+      setStatus('Аннотированный DXF экспортирован', 'ok');
+    } catch (error) {
+      console.error('DXF export error:', error);
+      setStatus(`Ошибка экспорта DXF: ${error.message}`, 'err');
+    }
+  });
+  
+  on($('dlPDF'),'click', async () => {
+    try {
+      const layout = state.combinedNesting || state.nesting;
+      if (!layout) {
+        setStatus('Сначала выполните раскладку', 'err');
+        return;
+      }
+      
+      setStatus('Генерация PDF отчета...', 'warn');
+      
+      const files = state.combinedNesting 
+        ? projectState.files.filter(f => f.includeInLayout && f.parsed)
+        : [getActiveFile()];
+      
+      await generatePDFReport(state, layout, files);
+      setStatus('PDF отчет создан', 'ok');
+    } catch (error) {
+      console.error('PDF export error:', error);
+      setStatus(`Ошибка экспорта PDF: ${error.message}`, 'err');
+    }
+  });
+  
+  on($('dlJPEG'),'click', async () => {
+    try {
+      const layout = state.combinedNesting || state.nesting;
+      if (!layout) {
+        setStatus('Сначала выполните раскладку', 'err');
+        return;
+      }
+      
+      setStatus('Экспорт раскладки в JPEG...', 'warn');
+      
+      exportLayoutAsJPEG(state, cv, layout);
+      setStatus('Раскладка экспортирована в JPEG', 'ok');
+    } catch (error) {
+      console.error('JPEG export error:', error);
+      setStatus(`Ошибка экспорта JPEG: ${error.message}`, 'err');
+    }
+  });
 
   // Drag & drop / file handling for multiple files
   // const drop=$('drop');
@@ -1995,7 +2044,7 @@ async function loadFile(file){
     setActiveFile(fileObj.id);
     
     // Enable buttons
-    ['calc','nest','dlOrig','dlAnn','dlDXFMarkers','dlSVG','dlCSV','dlReport'].forEach(id=>{ const el = $(id); if(el) el.disabled=false; });
+    ['calc','nest','dlAnn','dlPDF','dlJPEG'].forEach(id=>{ const el = $(id); if(el) el.disabled=false; });
     
     // Handle export section visibility
     const dlContainer = $('dl');

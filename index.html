@@ -92,10 +92,10 @@
           <div><label>Машино-час, ₽/ч</label><input id="machPrice" type="number" value="500" step="50" readonly></div>
         </div>
 
-        <div class="section-title">Лист и количество</div>
+        <div class="section-title">📐 Лист</div>
         <div class="row">
-          <div><label>Ширина листа, мм</label><input id="sW" type="number" value="1500"></div>
-          <div><label>Высота листа, мм</label><input id="sH" type="number" value="3000"></div>
+          <div><label>Ширина листа, мм</label><input id="sW" type="number" value="1250"></div>
+          <div><label>Высота листа, мм</label><input id="sH" type="number" value="2500"></div>
         </div>
         <div class="row">
           <div><label>Отступ, мм</label><input id="margin" type="number" value="10"></div>
@@ -110,9 +110,9 @@
               <option value="0,90,180,270">0°/90°/180°/270°</option>
             </select>
           </div>
-          <div>
-            <label>Количество деталей</label>
-            <input id="qty" type="number" value="1" min="1" max="999">
+          <div style="visibility: hidden;">
+            <!-- Hidden quantity field for backward compatibility -->
+            <input id="qty" type="hidden" value="1">
           </div>
         </div>
 
@@ -122,12 +122,9 @@
         </div>
         <div id="exportContent" class="collapsible-content" style="display:none;">
           <div id="dl" style="display:flex;gap:8px;flex-wrap:wrap" hidden>
-            <button id="dlOrig" class="btn" disabled>⬇️ DXF (ориг.)</button>
-            <button id="dlAnn" class="btn" disabled>⬇️ DXF (комментарии)</button>
-            <button id="dlDXFMarkers" class="btn" disabled>⬇️ DXF (маркерный слой)</button>
-            <button id="dlSVG" class="btn" disabled>⬇️ SVG</button>
-            <button id="dlCSV" class="btn" disabled>⬇️ CSV</button>
-            <button id="dlReport" class="btn" disabled>⬇️ Отчёт</button>
+            <button id="dlAnn" class="btn" disabled>📄 DXF (аннотированный)</button>
+            <button id="dlPDF" class="btn" disabled>📋 PDF (отчет)</button>
+            <button id="dlJPEG" class="btn" disabled title="Выгрузка раскладки">🖼️ JPEG (раскладка)</button>
           </div>
         </div>
 
