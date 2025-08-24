@@ -79,7 +79,7 @@ async function ensureHtml2PDFLoaded() {
 function isHtml2PDFAvailable() {
   try {
     // Check if html2pdf is available and has the required methods
-    return window.html2pdf && typeof window.html2pdf === 'function' && window.html2pdf().set;
+    return window.html2pdf && typeof window.html2pdf === 'function';
   } catch (error) {
     console.warn('Error checking html2pdf.js availability:', error);
     return false;
@@ -205,44 +205,26 @@ export async function generatePDFReport(data, filename = 'dxf-pro-report.pdf') {
     
     console.log('Starting PDF generation with html2pdf...');
     
-    // Generate PDF
-    const pdfWorker = window.html2pdf();
-    console.log('pdfWorker created:', !!pdfWorker);
-    
-    if (!pdfWorker) {
-      throw new Error('Failed to create html2pdf worker');
-    }
-    
-    const workerWithSettings = pdfWorker.set(options);
-    console.log('Worker with settings:', !!workerWithSettings);
-    
-    if (!workerWithSettings) {
-      throw new Error('Failed to set options on html2pdf worker');
-    }
-    
-    const workerWithSource = workerWithSettings.from(tempContainer);
-    console.log('Worker with source:', !!workerWithSource);
-    
-    if (!workerWithSource) {
-      throw new Error('Failed to set source on html2pdf worker');
-    }
-    
-    // Use the promise-based approach for better error handling
+    // Generate PDF using a simpler approach that's more reliable
     await new Promise((resolve, reject) => {
-      workerWithSource
-        .save()
-        .then(() => {
-          console.log('PDF saved successfully');
-          resolve();
-        })
-        .catch((error) => {
-          console.error('Error saving PDF:', error);
-          reject(new Error(`Ошибка сохранения PDF: ${error.message}`));
-        })
-        .finally(() => {
-          // Clean up
+      try {
+        // Create a new worker each time to avoid issues
+        const worker = window.html2pdf().set(options).from(tempContainer).save();
+        
+        worker.then(() => {
+          console.log('PDF generated successfully');
           document.body.removeChild(tempContainer);
+          resolve();
+        }).catch((error) => {
+          console.error('Error generating PDF:', error);
+          document.body.removeChild(tempContainer);
+          reject(new Error(`Ошибка генерации PDF: ${error.message}`));
         });
+      } catch (error) {
+        console.error('Error creating PDF worker:', error);
+        document.body.removeChild(tempContainer);
+        reject(new Error(`Ошибка создания PDF: ${error.message}`));
+      }
     });
     
     console.log('PDF report generated successfully');
@@ -270,6 +252,7 @@ function createReportHTML(data) {
     console.warn('Warning: Report data appears to be empty or incomplete');
   }
   
+  // Even if data is incomplete, we still generate a basic report to test
   return `
     <!DOCTYPE html>
     <html lang="ru">
@@ -634,22 +617,24 @@ export async function generateSimplePDFReport(data, filename = 'dxf-pro-simple-r
     
     // Generate PDF using promise-based approach
     await new Promise((resolve, reject) => {
-      window.html2pdf()
-        .set(options)
-        .from(tempContainer)
-        .save()
-        .then(() => {
-          console.log('Simple PDF saved successfully');
-          resolve();
-        })
-        .catch((error) => {
-          console.error('Error saving simple PDF:', error);
-          reject(new Error(`Ошибка сохранения простого PDF: ${error.message}`));
-        })
-        .finally(() => {
-          // Clean up
+      try {
+        // Create a new worker each time to avoid issues
+        const worker = window.html2pdf().set(options).from(tempContainer).save();
+        
+        worker.then(() => {
+          console.log('Simple PDF generated successfully');
           document.body.removeChild(tempContainer);
+          resolve();
+        }).catch((error) => {
+          console.error('Error generating simple PDF:', error);
+          document.body.removeChild(tempContainer);
+          reject(new Error(`Ошибка генерации простого PDF: ${error.message}`));
         });
+      } catch (error) {
+        console.error('Error creating simple PDF worker:', error);
+        document.body.removeChild(tempContainer);
+        reject(new Error(`Ошибка создания простого PDF: ${error.message}`));
+      }
     });
     
     console.log('Simple PDF report generated successfully');

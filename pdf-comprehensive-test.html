@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXF PRO PDF Generation Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #005a87;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #5a6268;
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .status.ok {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        .status.err {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        .status.warn {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            display: block;
+        }
+        .log {
+            background-color: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
+            display: none;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .data-preview {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .data-preview h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        pre {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>DXF PRO PDF Generation Test</h1>
+    
+    <div class="test-container">
+        <h2>Тестирование генерации PDF</h2>
+        <p>Этот тест проверяет корректную работу генерации PDF с поддержкой кириллических символов.</p>
+        
+        <div class="button-group">
+            <button id="testBasicPdf">Базовый тест PDF</button>
+            <button id="testWithData" class="secondary">Тест с данными</button>
+            <button id="testEmptyData" class="secondary">Тест с пустыми данными</button>
+            <button id="showLogs" class="secondary">Показать логи</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+        <div id="logs" class="log"></div>
+        
+        <div class="data-preview">
+            <h3>Пример структуры данных для PDF:</h3>
+            <pre id="dataExample"></pre>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the PDF generation function
+        import { generatePDFReport, generateSimplePDFReport } from './pdf-export-html2pdf.js';
+        
+        // DOM elements
+        const basicTestBtn = document.getElementById('testBasicPdf');
+        const withDataBtn = document.getElementById('testWithData');
+        const emptyDataBtn = document.getElementById('testEmptyData');
+        const showLogsBtn = document.getElementById('showLogs');
+        const statusDiv = document.getElementById('status');
+        const logsDiv = document.getElementById('logs');
+        const dataExample = document.getElementById('dataExample');
+        
+        // Log messages
+        let logs = [];
+        
+        // Function to log messages
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            logs.push(logMessage);
+            console.log(logMessage);
+            
+            // Update logs display if visible
+            if (logsDiv.style.display !== 'none') {
+                logsDiv.textContent = logs.join('\n');
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            }
+        }
+        
+        // Function to set status message
+        function setStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+        }
+        
+        // Sample data structures
+        const sampleLayout = {
+            sheets: 2,
+            totalSheets: 2,
+            efficiency: 85.5,
+            sheetWidth: 1250,
+            sheetHeight: 2500
+        };
+        
+        const sampleFiles = [
+            {
+                name: 'деталь_1.dxf',
+                parsed: {
+                    totalLen: 15.75,
+                    pierceCount: 3,
+                    entities: [{}, {}, {}]
+                },
+                calculatedCost: {
+                    timeForAllParts: 12.5,
+                    costForAllParts: 1250
+                }
+            },
+            {
+                name: 'деталь_2.dxf',
+                parsed: {
+                    totalLen: 8.3,
+                    pierceCount: 1,
+                    entities: [{}]
+                },
+                calculatedCost: {
+                    timeForAllParts: 6.2,
+                    costForAllParts: 620
+                }
+            }
+        ];
+        
+        const sampleData = {
+            state: {
+                tab: 'nest'
+            },
+            layout: sampleLayout,
+            files: sampleFiles
+        };
+        
+        const emptyData = {
+            state: {},
+            layout: {},
+            files: []
+        };
+        
+        // Display sample data
+        dataExample.textContent = JSON.stringify(sampleData, null, 2);
+        
+        // Basic PDF test
+        basicTestBtn.addEventListener('click', async () => {
+            try {
+                logs = [];
+                log('Starting basic PDF test...');
+                
+                basicTestBtn.disabled = true;
+                basicTestBtn.textContent = 'Генерация PDF...';
+                setStatus('Генерация базового PDF...', 'warn');
+                
+                // Create minimal HTML content
+                const minimalData = {
+                    state: {},
+                    layout: { sheets: 1 },
+                    files: [{
+                        name: 'Тестовый файл',
+                        parsed: { totalLen: 5.0, pierceCount: 2 },
+                        calculatedCost: { timeForAllParts: 10.0, costForAllParts: 1000 }
+                    }]
+                };
+                
+                await generatePDFReport(minimalData, 'basic-test-report.pdf');
+                
+                setStatus('Базовый PDF успешно создан!', 'ok');
+                log('Basic PDF generated successfully');
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                setStatus(`Ошибка: ${error.message}`, 'err');
+            } finally {
+                basicTestBtn.disabled = false;
+                basicTestBtn.textContent = 'Базовый тест PDF';
+            }
+        });
+        
+        // Test with sample data
+        withDataBtn.addEventListener('click', async () => {
+            try {
+                logs = [];
+                log('Starting PDF test with sample data...');
+                
+                withDataBtn.disabled = true;
+                withDataBtn.textContent = 'Генерация PDF...';
+                setStatus('Генерация PDF с тестовыми данными...', 'warn');
+                
+                await generatePDFReport(sampleData, 'sample-data-report.pdf');
+                
+                setStatus('PDF с данными успешно создан!', 'ok');
+                log('PDF with data generated successfully');
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                setStatus(`Ошибка: ${error.message}`, 'err');
+            } finally {
+                withDataBtn.disabled = false;
+                withDataBtn.textContent = 'Тест с данными';
+            }
+        });
+        
+        // Test with empty data
+        emptyDataBtn.addEventListener('click', async () => {
+            try {
+                logs = [];
+                log('Starting PDF test with empty data...');
+                
+                emptyDataBtn.disabled = true;
+                emptyDataBtn.textContent = 'Генерация PDF...';
+                setStatus('Генерация PDF с пустыми данными...', 'warn');
+                
+                await generateSimplePDFReport(emptyData, 'empty-data-report.pdf');
+                
+                setStatus('PDF с пустыми данными успешно создан!', 'ok');
+                log('PDF with empty data generated successfully');
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                setStatus(`Ошибка: ${error.message}`, 'err');
+            } finally {
+                emptyDataBtn.disabled = false;
+                emptyDataBtn.textContent = 'Тест с пустыми данными';
+            }
+        });
+        
+        // Show/hide logs
+        showLogsBtn.addEventListener('click', () => {
+            if (logsDiv.style.display === 'none') {
+                logsDiv.style.display = 'block';
+                logsDiv.textContent = logs.join('\n');
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+                showLogsBtn.textContent = 'Скрыть логи';
+            } else {
+                logsDiv.style.display = 'none';
+                showLogsBtn.textContent = 'Показать логи';
+            }
+        });
+        
+        log('PDF test page loaded successfully');
+        setStatus('Готов к тестированию. Выберите тип теста.', 'warn');
+    </script>
+</body>
+</html>
