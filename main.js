@@ -1767,20 +1767,6 @@ function initializeEventHandlers() {
   });
 
   // Modern Export Functions
-  on($('dlAnn'),'click', async () => {
-    try {
-      if (!state.parsed) {
-        setStatus('Нет данных для экспорта', 'err');
-        return;
-      }
-      downloadText('annotated_comments.dxf', createAnnotatedDXF(state.rawDXF, state.parsed));
-      setStatus('Аннотированный DXF экспортирован', 'ok');
-    } catch (error) {
-      console.error('DXF export error:', error);
-      setStatus(`Ошибка экспорта DXF: ${error.message}`, 'err');
-    }
-  });
-  
   on($('dlPDF'),'click', async () => {
     const button = $('dlPDF');
     const originalText = button.textContent;
@@ -1867,6 +1853,7 @@ function initializeEventHandlers() {
         }
       }
       
+      // Generate PDF using html2pdf
       await generatePDFReportWithHtml2PDF(reportData, 'dxf-pro-report.pdf');
       setStatus('PDF отчет успешно создан и скачан', 'ok');
     } catch (error) {

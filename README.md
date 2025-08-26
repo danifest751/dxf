@@ -1,3 +1,77 @@
+# DXF PRO - PDF Generation Test
+
+## How to Test PDF Generation
+
+Since modern browsers block loading ES6 modules from local files due to CORS restrictions, you need to serve the files through a web server.
+
+### Option 1: Using the Batch Files (Windows)
+
+Double-click on one of these batch files to start the server:
+
+- `start-server.bat` - Starts the Node.js server (requires Node.js to be installed)
+- `start-python-server.bat` - Starts the Python server (requires Python to be installed)
+
+Then open your browser and go to:
+- http://localhost:8000/simple-pdf-test.html - Test PDF generation with a simple test
+- http://localhost:8000/pdf-test-no-modules.html - Test PDF generation without modules
+- http://localhost:8000/index.html - Main application
+
+### Option 2: Using Node.js Server (Manual)
+
+1. Make sure you have Node.js installed on your system
+2. Open a terminal/command prompt in the `c:\calc` directory
+3. Run the server:
+   ```
+   node server.js
+   ```
+4. Open your browser and go to:
+   - http://localhost:8000/simple-pdf-test.html - Test PDF generation with a simple test
+   - http://localhost:8000/pdf-test-no-modules.html - Test PDF generation without modules
+   - http://localhost:8000/index.html - Main application
+
+### Option 3: Using Python Server (Manual)
+
+If you have Python installed:
+
+1. Open a terminal/command prompt in the `c:\calc` directory
+2. Run the server:
+   ```
+   python start-server.py
+   ```
+   or
+   ```
+   python -m http.server 8000
+   ```
+3. Open your browser and go to:
+   - http://localhost:8000/simple-pdf-test.html - Test PDF generation with a simple test
+   - http://localhost:8000/pdf-test-no-modules.html - Test PDF generation without modules
+   - http://localhost:8000/index.html - Main application
+
+## Testing PDF Generation
+
+1. Open http://localhost:8000/simple-pdf-test.html in your browser
+2. Click on the "Сгенерировать тестовый PDF" button
+3. The PDF should be automatically downloaded by your browser
+
+## Troubleshooting
+
+If you're still getting blank PDFs:
+
+1. Check the browser console for any error messages
+2. Make sure you have a stable internet connection (html2pdf.js is loaded from a CDN)
+3. Try refreshing the page
+4. Make sure JavaScript is enabled in your browser
+
+## Files
+
+- `simple-pdf-test.html` - Simple test page for PDF generation
+- `pdf-test-no-modules.html` - Test page that works without ES6 modules
+- `start-server.bat` - Batch file to start the Node.js server (Windows)
+- `start-python-server.bat` - Batch file to start the Python server (Windows)
+- `server.js` - Simple Node.js server to serve files
+- `start-server.py` - Python script to serve files
+- `pdf-export-html2pdf.js` - Main PDF generation module
+
 # DXF PRO — Калькулятор лазерной резки
 
 Профессиональное веб-приложение для анализа DXF-файлов, расчёта стоимости лазерной резки, оптимизации раскладки деталей и экспорта результатов.
@@ -138,7 +212,7 @@ dxf-pro/
 ## ⚙️ Конфигурация
 
 ### Файл `config.json`
-```json
+```
 {
   "cutting": {
     "baseCutSpeeds": {

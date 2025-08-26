@@ -36,7 +36,7 @@ export async function preloadJsPDF() {
     console.log('Preloading jsPDF library...');
     const success = await ensureJsPDFLoaded();
     if (success) {
-      console.log('jsPDF preloaded successfully');
+    console.log('jsPDF preloaded successfully');
     }
     return success;
   } catch (error) {
@@ -333,7 +333,7 @@ function createSimpleFallbackReport(state, layout, files) {
     if (layout.efficiency) {
       reportLines.push(`Эффективность: ${layout.efficiency.toFixed(1)}%`);
     }
-    reportLines.push('');
+  reportLines.push('');
   }
   
   if (files && files.length > 0) {
@@ -343,7 +343,7 @@ function createSimpleFallbackReport(state, layout, files) {
         reportLines.push(`${index + 1}. ${file.name}`);
         reportLines.push(`   Длина реза: ${file.parsed.totalLen ? file.parsed.totalLen.toFixed(3) : '—'} м`);
         reportLines.push(`   Количество врезок: ${file.parsed.pierceCount || '—'}`);
-        if (file.calculatedCost) {
+      if (file.calculatedCost) {
           reportLines.push(`   Время на деталь: ${file.calculatedCost.timePerPart ? file.calculatedCost.timePerPart.toFixed(1) : '—'} мин`);
           reportLines.push(`   Стоимость детали: ${file.calculatedCost.costPerPart ? file.calculatedCost.costPerPart.toFixed(0) : '—'} ₽`);
         }
@@ -567,26 +567,26 @@ function addRussianText(pdf, text, x, y, options = {}) {
         console.log(`🎨 Trying font: ${font}`);
         pdf.setFont(font, 'normal');
         
-        if (options.maxWidth) {
-          // Handle text wrapping for long text
-          const lines = pdf.splitTextToSize(text, options.maxWidth);
-          if (options.maxLines && lines.length > options.maxLines) {
-            lines.splice(options.maxLines - 1);
-            lines[lines.length - 1] += '...';
-          }
-          
-          lines.forEach((line, index) => {
+    if (options.maxWidth) {
+      // Handle text wrapping for long text
+      const lines = pdf.splitTextToSize(text, options.maxWidth);
+      if (options.maxLines && lines.length > options.maxLines) {
+        lines.splice(options.maxLines - 1);
+        lines[lines.length - 1] += '...';
+      }
+      
+      lines.forEach((line, index) => {
             console.log(`📄 Rendering line ${index + 1}: "${line}"`);
-            pdf.text(line, x, y + (index * (options.lineHeight || 7)));
-          });
-          
+        pdf.text(line, x, y + (index * (options.lineHeight || 7)));
+      });
+      
           success = true;
           console.log(`✅ Successfully rendered with font: ${font}`);
           break;
-        } else {
+    } else {
           // Try to render the text
           console.log(`📄 Rendering text: "${text}"`);
-          pdf.text(text, x, y);
+      pdf.text(text, x, y);
           success = true;
           console.log(`✅ Successfully rendered with font: ${font}`);
           break;
@@ -1322,7 +1322,7 @@ function addLayoutGraphics(pdf, state, layout, margin, yPos, pageWidth, pageHeig
   
   // Add sheet info
   addRussianText(pdf, `Лист ${layout.sheets || 1}: ${sheetWidth}x${sheetHeight} мм`, drawX + drawWidth + 10, drawY + 10);
-  if (layout.efficiency) {
+    if (layout.efficiency) {
     addRussianText(pdf, `Эффективность: ${layout.efficiency.toFixed(1)}%`, drawX + drawWidth + 10, drawY + 25);
   }
   
@@ -1377,4 +1377,4 @@ function addFinalSummary(pdf, layout, files, margin, yPos, lineHeight, maxConten
   });
   
   return yPos + lineHeight;
-} 
+}
