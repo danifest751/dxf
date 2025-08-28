@@ -637,6 +637,17 @@ function autoCalculateLayout() {
     
     // Clear combined nesting
     state.combinedNesting = null;
+
+    // Дополнительно гарантируем обновление UI итогов для одиночной раскладки
+    if (file.nesting) {
+      try {
+        updateNestingCards(file.nesting, file);
+      } catch (e) {
+        console.warn('Failed to update single-file nesting card after auto-calc:', e);
+      }
+    } else {
+      console.warn('Single-file nesting plan is missing after calculation');
+    }
   } else {
     // Multiple files - perform combined nesting
     console.log('Performing combined nesting for', includedFiles.length, 'files');
