@@ -754,13 +754,20 @@ function updateNestingCards(plan, file) {
       const cutMinPerPart = (file.parsed.totalLen * 1000) / speed;
       const pierceMinPerPart = (file.parsed.pierceCount * pierce) / 60;
       const totalMinPerPart = cutMinPerPart + pierceMinPerPart;
-      const timePerSheet = totalMinPerPart * plan.placed;
-      const totalTime = timePerSheet * plan.sheets;
+
+      // Если деталь не помещается на лист (plan.placed === 0), всё равно считаем общие время/стоимость по количеству деталей
+      const isOversize = plan.placed === 0;
+      const qtyAll = totalQuantity;
+
+      const timePerSheet = isOversize ? NaN : (totalMinPerPart * plan.placed);
+      const totalTime = isOversize ? (totalMinPerPart * qtyAll) : (timePerSheet * plan.sheets);
       
       // Update time values with error checking
       try {
-        if (!isNaN(timePerSheet) && isFinite(timePerSheet)) {
+        if (!isOversize && !isNaN(timePerSheet) && isFinite(timePerSheet)) {
           $('nTime').textContent = timePerSheet.toFixed(2) + ' мин';
+        } else if (isOversize) {
+          $('nTime').textContent = '—';
         } else {
           $('nTime').textContent = '0.00 мин';
           console.error('Invalid timePerSheet value:', timePerSheet);
@@ -790,8 +797,9 @@ function updateNestingCards(plan, file) {
       const gasRubPerPart = gasRubPerMin * totalMinPerPart * (gasCons ? gasCons/4 : 1);
       const machRubPerPart = (machRubPerHr/60) * totalMinPerPart;
       const totalRubPerPart = cutRubPerPart + pierceRubPerPart + gasRubPerPart + machRubPerPart;
-      const costPerSheet = totalRubPerPart * plan.placed;
-      const totalCost = costPerSheet * plan.sheets;
+
+      const costPerSheet = isOversize ? NaN : (totalRubPerPart * plan.placed);
+      const totalCost = isOversize ? (totalRubPerPart * qtyAll) : (costPerSheet * plan.sheets);
       
       console.log('Cost calculation:', { 
         cutRubPerPart, 
@@ -800,13 +808,16 @@ function updateNestingCards(plan, file) {
         machRubPerPart, 
         totalRubPerPart, 
         costPerSheet, 
-        totalCost 
+        totalCost,
+        isOversize
       });
       
       // Update UI elements with error checking
       try {
-        if (!isNaN(costPerSheet) && isFinite(costPerSheet)) {
+        if (!isOversize && !isNaN(costPerSheet) && isFinite(costPerSheet)) {
           $('nCost').textContent = costPerSheet.toFixed(2) + ' ₽';
+        } else if (isOversize) {
+          $('nCost').textContent = '—';
         } else {
           $('nCost').textContent = '0.00 ₽';
           console.error('Invalid costPerSheet value:', costPerSheet);
@@ -820,6 +831,12 @@ function updateNestingCards(plan, file) {
         }
       } catch (error) {
         console.error('Error updating cost display:', error);
+      }
+      
+      // Для информирования пользователя добавим заметку, что деталь не помещается
+      if (isOversize) {
+        const note = document.getElementById('nestingNote');
+        if (note) note.textContent = 'Деталь не помещается на лист при заданных размерах листа/отступа/зазора. Итоги посчитаны по общему количеству деталей.';
       }
     } else {
       // Handle cases where calculation is not possible
