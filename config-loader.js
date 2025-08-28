@@ -61,7 +61,7 @@ function validateConfig(cfg) {
       warnings.push(`Invalid gas value: ${cfg.cutting.gas}. Valid values: ${validGases.join(', ')}`);
     }
     
-    const validThicknesses = [0.5, 0.6, 0.7, 0.8, 1, 1.5, 2, 3, 5, 6];
+    const validThicknesses = [0.5, 0.6, 0.7, 0.8, 1, 1.5, 2, 3];
     if (cfg.cutting.thickness && !validThicknesses.includes(Number(cfg.cutting.thickness))) {
       warnings.push(`Invalid thickness: ${cfg.cutting.thickness}. Valid values: ${validThicknesses.join(', ')}`);
     }
