@@ -424,10 +424,10 @@ function updateCombinedNestingUI(layout, allParts) {
   for (const group of Object.values(fileGroups)) {
     const file = group.file;
     if (file.parsed) {
-      if (file.parsed.totalLen) {
+      if (Number.isFinite(file.parsed.totalLen)) {
         totalCutLength += file.parsed.totalLen * group.count;
       }
-      if (file.parsed.pierceCount) {
+      if (Number.isFinite(file.parsed.pierceCount)) {
         totalPierces += file.parsed.pierceCount * group.count;
       }
       if (file.parsed.entities) {
@@ -465,7 +465,7 @@ function updateCombinedNestingUI(layout, allParts) {
       count: group.count
     });
     
-    if (file.parsed && file.parsed.totalLen && file.parsed.pierceCount) {
+    if (file.parsed && Number.isFinite(file.parsed.totalLen) && Number.isFinite(file.parsed.pierceCount)) {
       // Ensure file has proper settings
       if (!file.settings) {
         console.warn('File missing settings, initializing defaults:', file.name);
@@ -670,8 +670,8 @@ function updateNestingCards(plan, file) {
   
   // Calculate total geometry for all placed parts
   const totalQuantity = file.quantity || 1;
-  const totalCutLength = file.parsed && file.parsed.totalLen ? (file.parsed.totalLen * totalQuantity).toFixed(3) + ' м' : '—';
-  const totalPierces = file.parsed && file.parsed.pierceCount ? (file.parsed.pierceCount * totalQuantity) : '—';
+  const totalCutLength = (file.parsed && Number.isFinite(file.parsed.totalLen)) ? (file.parsed.totalLen * totalQuantity).toFixed(3) + ' м' : '—';
+  const totalPierces = (file.parsed && Number.isFinite(file.parsed.pierceCount)) ? (file.parsed.pierceCount * totalQuantity) : '—';
   const totalObjects = file.parsed && file.parsed.entities ? (file.parsed.entities.length * totalQuantity) : '—';
   
   // Update total geometry summary
@@ -690,7 +690,7 @@ function updateNestingCards(plan, file) {
   $('nEff').textContent = eff.toFixed(1) + '%';
   
   // Calculate time and cost per sheet and totals
-  if (file.parsed && file.parsed.totalLen && file.parsed.pierceCount) {
+  if (file.parsed && Number.isFinite(file.parsed.totalLen) && Number.isFinite(file.parsed.pierceCount)) {
     // Ensure file has proper settings
     if (!file.settings) {
       console.warn('File missing settings, initializing defaults:', file.name);
