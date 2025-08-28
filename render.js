@@ -50,6 +50,7 @@ export function initCanvasInteractions(state, canvas, onDraw) {
   // Инициализация свойств состояния если они не существуют
   if (!state.pan) state.pan = { x: 0, y: 0 };
   if (!state.zoom) state.zoom = 1;
+  if (typeof state.hasUserTransform !== 'boolean') state.hasUserTransform = false;
   if (!state.tab) state.tab = 'orig';
 
   const world = () => {
@@ -80,6 +81,7 @@ export function initCanvasInteractions(state, canvas, onDraw) {
       last = { x: e.clientX, y: e.clientY };
       state.pan.x += dx; 
       state.pan.y += dy; 
+      state.hasUserTransform = true;
       debouncedDraw(onDraw); 
       return;
     }
@@ -117,6 +119,7 @@ export function initCanvasInteractions(state, canvas, onDraw) {
     const ny = canvas.height - (y * state.zoom * dpr + state.pan.y);
     state.pan.x += mx - nx; 
     state.pan.y += my - ny; 
+    state.hasUserTransform = true;
     
     debouncedDraw(onDraw);
   }, { passive: false });
@@ -670,6 +673,8 @@ export function fitView(state, canvas) {
     state.zoom = scale;
     state.pan.x = canvas.width / 2 - (minX + width / 2) * scale * dpr;
     state.pan.y = canvas.height / 2 + (minY + height / 2) * scale * dpr;
+    // После автоцентрирования считаем, что пользовательских трансформаций нет
+    state.hasUserTransform = false;
     
   } catch (error) {
     console.error('Ошибка при fitView:', error);

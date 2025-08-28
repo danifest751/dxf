@@ -81,7 +81,8 @@ function createFileObject(file, content) {
     nesting: null,
     tab: 'orig',
     pan: {x: 0, y: 0},
-    zoom: 1
+    zoom: 1,
+    hasUserTransform: false
   };
 }
 
@@ -124,6 +125,7 @@ function setActiveFile(fileId) {
       currentActive.tab = state.tab;
       currentActive.pan = {...state.pan};
       currentActive.zoom = state.zoom;
+      currentActive.hasUserTransform = !!state.hasUserTransform;
       currentActive.nesting = state.nesting;
     }
     
@@ -138,6 +140,13 @@ function setActiveFile(fileId) {
     state.pan = {...file.pan};
     state.zoom = file.zoom;
     state.nesting = file.nesting;
+    
+    if (file.parsed) {
+      // Restore view parameters if available
+      state.pan = file.pan || { x: 0, y: 0 };
+      state.zoom = file.zoom || 1;
+      state.hasUserTransform = typeof file.hasUserTransform === 'boolean' ? file.hasUserTransform : false;
+    }
     
     // Validate state synchronization
     validateStateSynchronization();
@@ -155,6 +164,11 @@ function setActiveFile(fileId) {
     if (file.nesting) {
       updateNestingCards(file.nesting, file);
     } else if (state.combinedNesting) {
+      // If needed, auto-fit the view for orig/annot when user hasn't transformed
+      if (!state.hasUserTransform && (state.tab === 'orig' || state.tab === 'annot')) {
+        fitView(state, cv);
+      }
+
       // If we're in combined mode, update combined UI
       const includedFiles = projectState.files.filter(f => f.includeInLayout && f.parsed);
       if (includedFiles.length > 1) {
@@ -1583,6 +1597,10 @@ function initializeEventHandlers() {
     document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t)); 
     // Update empty layout message when switching tabs
     updateEmptyLayoutMessage();
+    // Автоцентрирование для исходного и аннотированного видов, если пользователь не менял трансформацию
+    if (state.parsed && (state.tab==='orig' || state.tab==='annot') && !state.hasUserTransform) {
+      fitView(state, cv);
+    }
     safeDraw(); 
   }));
   
