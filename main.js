@@ -278,7 +278,8 @@ function performBinPacking(parts, sheetW, sheetH, margin, spacing, rotations) {
   
   const sheets = [];
   const usableW = sheetW - 2 * margin;
-  const usableH = sheetH - 2 * spacing;
+  // BUGFIX: должно вычитаться 2 * margin, а не spacing
+  const usableH = sheetH - 2 * margin;
   
   for (const part of sortedParts) {
     let placed = false;
@@ -458,9 +459,25 @@ function updateCombinedNestingUI(layout, allParts) {
   // Update unified card elements
   $('nTotalFiles').textContent = uniqueFiles.size;
   $('nTotalParts').textContent = allParts.length;
-  $('nPlaced').textContent = allParts.length;
+
+  // Фактически размещённые детали на всех листах
+  const placed = Array.isArray(layout.sheets)
+    ? layout.sheets.reduce((sum, sh) => sum + (Array.isArray(sh.parts) ? sh.parts.length : 0), 0)
+    : 0;
+  const unplaced = Math.max(0, allParts.length - placed);
+  $('nPlaced').textContent = placed;
   $('nSheets').textContent = layout.totalSheets;
   $('nEff').textContent = layout.efficiency.toFixed(1) + '%';
+
+  // Предупреждение, если есть неразмещённые детали
+  const note = document.getElementById('nestingNote');
+  if (note) {
+    if (unplaced > 0) {
+      note.textContent = `Часть деталей (${unplaced} шт.) не разместилась на листах при заданных размерах/отступах/зазоре.`;
+    } else {
+      note.textContent = 'Раскладка сеточная, повороты выбором 0/90/180/270 (180 и 0, 270 и 90 эквивалентны по габариту).';
+    }
+  }
   
   // Calculate combined time and cost with debug logging
   let totalTime = 0;
